@@ -1,0 +1,42 @@
+{
+  "app": "cpred_roster",
+  "roster": [
+    {
+      "name": "Test Runner",
+      "handle": "Debug",
+      "role": "Solo",
+      "roles": [{"role":"Solo","rank":4,"data":{"rank":4,"damageDeflection":0,"fumbleRecovery":0,"initiativeReaction":0,"precisionAttack":3,"spotWeakness":0,"threatDetection":1}}],
+      "stats": {"int":4,"ref":4,"dex":4,"tech":4,"cool":4,"will":4,"luck":4,"move":4,"body":4,"emp":4},
+      "skills": {},
+      "skillMisc": {},
+      "hpMax": 30,
+      "headSP": 11, "headSPMax": 11,
+      "bodySP": 11, "bodySPMax": 11,
+      "headArmor": {"name":"Light Armorjack","sp":11,"penalty":0,"loc":"both","note":""},
+      "bodyArmor": {"name":"Light Armorjack","sp":11,"penalty":0,"loc":"both","note":""},
+      "humanityMax": 40, "humanity": 36,
+      "humanityGained": 0, "humanityLost": 4,
+      "weapons": [
+        {"id":"tw1","name":"Medium Pistol","skill":"Handgun","dmg":"2d6","mag":12,"ammo":12,"rangeRow":"Pistol","hitBonus":0,"dmgBonus":0,"rof":2,"armorMode":"full","ignoreBelow":null,"apDefault":false,"melee":false,"autoMult":null,"autoRow":null,"areaMode":null,"ammoType":"basic","reloadActions":1,"reloading":0},
+        {"id":"tw2","name":"Assault Rifle","skill":"Shoulder Arms","dmg":"5d6","mag":25,"ammo":25,"rangeRow":"Assault Rifle","hitBonus":0,"dmgBonus":0,"rof":1,"armorMode":"full","ignoreBelow":null,"apDefault":false,"melee":false,"autoMult":4,"autoRow":"Assault Rifle","areaMode":null,"ammoType":"basic","reloadActions":1,"reloading":0},
+        {"id":"tw3","name":"Heavy Melee","skill":"Melee Weapon","dmg":"3d6","mag":null,"ammo":null,"rangeRow":null,"hitBonus":0,"dmgBonus":0,"rof":2,"armorMode":"half","ignoreBelow":null,"apDefault":false,"melee":true,"autoMult":null,"autoRow":null,"areaMode":null,"ammoType":"basic","reloadActions":1,"reloading":0}
+      ],
+      "ammo": [
+        {"weapon":"Medium Pistol","qty":24,"type":"Basic","notes":"spare mags"},
+        {"weapon":"Medium Pistol","qty":12,"type":"AP","notes":""},
+        {"weapon":"Assault Rifle","qty":50,"type":"Basic","notes":""},
+        {"weapon":"Assault Rifle","qty":25,"type":"AP","notes":""}
+      ],
+      "tools": [],
+      "wardrobe": [],
+      "misc": [],
+      "archive": {"gigs":[],"improvements":[],"purchases":[],"dtd":[],"notes":"","curSession":1},
+      "cyberware": "",
+      "gear": "",
+      "notes": "Test character — all 4s",
+      "cn": 0, "useCN": false, "ncn": 0, "ncnAuto": true,
+      "canDodge": false, "dodgeBase": 0, "trackDeath": true, "body_stat": 4,
+      "side": "ally", "ip": 0, "eurodollars": 100
+    }
+  ]
+}
