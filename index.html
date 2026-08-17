@@ -2689,6 +2689,13 @@ function cardHtml(c){ const pct=Math.max(0,Math.min(100,Math.round(c.hp/c.hpMax*
   }
   if(c.canDodge&&!c.isCover)badges.push('<span class="badge dodge">↷ CAN DODGE '+dodgeValueOf(c)+'</span>');
   if(c.onFire)badges.push('<button type="button" class="badge wounded" aria-label="Put out the fire on '+esc(c.name)+'" onclick="douse(\''+c.id+'\')">🔥 ON FIRE — 2/turn<span class="xi" aria-hidden="true">✕</span></button>');
+  /* IN NET badge — if this combatant is the assigned runner of any architecture */
+  if(!c.isCover && typeof architectures!=='undefined'){
+    const arch=architectures.find(a=>a.runnerId && rosterFind(a.runnerId) && rosterFind(a.runnerId).name===c.name);
+    if(arch){
+      badges.push('<button type="button" class="badge" style="background:rgba(157,92,255,.2);color:#c9a4ff;border-color:rgba(157,92,255,.5);cursor:pointer;" onclick="runArchitecture(\''+arch.id+'\')" title="Open NET Architecture">🖧 IN NET · F'+((arch.currentFloor||0)+1)+'/'+arch.floors.length+'</button>');
+    }
+  }
   if(c.combatAwareness&&c.combatAwareness.rank){
     const _ca=c.combatAwareness; const _parts=[];
     if(_ca.precisionAttack) _parts.push('+'+CA_ABILITIES[3].bonusVal(_ca.precisionAttack)+' atk');
@@ -5297,11 +5304,12 @@ function saveArchitectures(){ store.set('cpred_architectures',JSON.stringify(arc
 function archFind(id){ return architectures.find(a=>a.id===id); }
 
 function blankArchitecture(){
-  return {id:uid(),name:'New Architecture',difficulty:'standard',floors:[],currentFloor:0,notes:'',owner:'',runnerId:''};
+  return {id:uid(),name:'New Architecture',difficulty:'standard',floors:[],currentFloor:0,notes:'',owner:'',runnerId:'',
+    netActionsUsed:0,programStates:{}};
 }
 
 function blankFloor(){
-  return {type:'Empty',dv:0,ice:'',demon:'',notes:'',cleared:false};
+  return {type:'Empty',dv:0,ice:'',demon:'',notes:'',cleared:false,rez:null,rezMax:null};
 }
 
 function renderArchitectureList(){
@@ -5418,8 +5426,12 @@ function asSetFloor(i,field,val){
 function asRollRandom(){
   const diffId=document.getElementById('asDiff').value;
   const diff=NET_DIFFICULTIES.find(d=>d.id===diffId)||NET_DIFFICULTIES[1];
-  /* 3d6 total floors */
-  const total=randInt(6)+randInt(6)+randInt(6);
+  /* scale floor count by difficulty tier: Basic 3d3, Standard 2d4+2, Uncommon 3d4, Advanced 3d6 */
+  let total;
+  if(diffId==='basic') total=randInt(3)+randInt(3)+randInt(3); /* 3-9, avg 6 */
+  else if(diffId==='standard') total=randInt(4)+randInt(4)+2; /* 4-10, avg 7 */
+  else if(diffId==='uncommon') total=randInt(4)+randInt(4)+randInt(4); /* 3-12, avg 7.5 */
+  else total=randInt(6)+randInt(6)+randInt(6); /* 3-18, avg 10.5 — Advanced only */
   const floors=[];
   const usedPrograms=new Set(); /* re-roll dupes */
   const rollLobby=()=>{
@@ -5488,9 +5500,12 @@ function deleteArchitecture(id){
   saveArchitectures(); renderArchitectureList();
   if(a) toast('Deleted '+a.name);
 }
-/* run architecture — open the runner modal */
+/* run architecture — open the runner modal with full combat state */
 function runArchitecture(id){
   const a=archFind(id); if(!a) return;
+  /* ensure state exists */
+  if(a.netActionsUsed==null) a.netActionsUsed=0;
+  if(!a.programStates) a.programStates={};
   const diff=NET_DIFFICULTIES.find(d=>d.id===a.difficulty)||NET_DIFFICULTIES[1];
   const runner=a.runnerId?rosterFind(a.runnerId):null;
   const runnerRole=runner&&runner.roles?runner.roles.find(r=>r.role==='Netrunner'):null;
@@ -5502,10 +5517,14 @@ function runArchitecture(id){
 
   /* runner header */
   if(runner){
+    const actionsLeft=Math.max(0,netActs-(a.netActionsUsed||0));
+    const actionsColor=actionsLeft===0?'var(--red)':actionsLeft<=1?'var(--amber)':'var(--cyan)';
     html+='<div style="background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--cyan);border-radius:8px;padding:10px;margin-bottom:12px;">'+
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'+
-        '<div style="flex:1;"><b style="font-size:14px;">🧑‍💻 '+esc(runner.name)+'</b>'+
-          '<span style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:8px;">Interface '+rank+' · '+netActs+' NET Actions</span></div>'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">'+
+        '<div style="flex:1;min-width:150px;"><b style="font-size:14px;">🧑‍💻 '+esc(runner.name)+'</b>'+
+          '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px;">Interface '+rank+' · <span style="color:'+actionsColor+';font-weight:700;">'+actionsLeft+'/'+netActs+' NET Actions</span></div></div>'+
+        '<button class="btn ghost sm" onclick="archSpendAction(\''+a.id+'\')" title="Spend 1 NET Action">−1</button>'+
+        '<button class="btn ghost sm" onclick="archResetActions(\''+a.id+'\')" title="Reset actions (new Turn)">↺ Turn</button>'+
         '<button class="btn ghost sm" onclick="archOpenRunnerSheet(\''+runner.id+'\')">👤 SHEET</button></div>';
 
     /* interface abilities inline */
@@ -5517,18 +5536,25 @@ function runArchitecture(id){
       });
       html+='</div>';
 
-      /* programs */
+      /* programs with REZ state */
       const allPrograms=[].concat(iface.deck1||[],iface.deck2Enabled?(iface.deck2||[]):[]);
       if(allPrograms.length){
         html+='<div class="sl2" style="margin:10px 0 4px;font-size:10px;">PROGRAMS</div>';
         allPrograms.forEach((p,pi)=>{
           const clsColor=p.cls==='Black ICE'?'var(--red)':p.cls==='Attacker'?'var(--amber)':'var(--cyan)';
           const canAttack=p.cls==='Attacker'||p.cls==='Black ICE';
-          html+='<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--line);">'+
-            '<b style="font-size:11px;flex:1;">'+esc(p.name)+' <span style="font-family:var(--mono);font-size:9px;color:'+clsColor+';">'+esc(p.cls)+'</span></b>'+
-            '<span style="font-family:var(--mono);font-size:9px;color:var(--muted);">ATK '+p.atk+' DEF '+p.def+' REZ '+p.rez+'</span>'+
-            (canAttack?'<button class="btn ghost sm" style="font-size:10px;padding:3px 6px;" onclick="archRollProgram(\''+a.id+'\','+pi+')">⚅ ATK</button>':
-              '<button class="btn ghost sm" style="font-size:10px;padding:3px 6px;" onclick="archRezProgram(\''+a.id+'\','+pi+')">REZ</button>')+
+          const state=a.programStates[pi]||{rez:p.rez,rezMax:p.rez,rezzed:false,usedThisTurn:false};
+          const isDerezzed=state.rez<=0;
+          const bg=isDerezzed?'opacity:0.4;':state.rezzed?'background:rgba(45,226,230,.06);':'';
+          html+='<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--line);'+bg+'flex-wrap:wrap;">'+
+            '<b style="font-size:11px;flex:1;min-width:100px;">'+esc(p.name)+' <span style="font-family:var(--mono);font-size:9px;color:'+clsColor+';">'+esc(p.cls)+'</span>'+
+              (state.rezzed?' <span style="color:var(--cyan);font-size:9px;">● REZZED</span>':'')+
+              (isDerezzed?' <span style="color:var(--red);font-size:9px;">✕ DEREZZED</span>':'')+'</b>'+
+            '<span style="font-family:var(--mono);font-size:9px;color:var(--muted);">ATK '+p.atk+' DEF '+p.def+' REZ '+state.rez+'/'+state.rezMax+'</span>'+
+            (canAttack?'<button class="btn ghost sm" style="font-size:10px;padding:3px 6px;" '+(isDerezzed?'disabled':'')+' onclick="archRollProgram(\''+a.id+'\','+pi+')">⚅ ATK</button>':
+              '<button class="btn ghost sm" style="font-size:10px;padding:3px 6px;color:'+(state.rezzed?'var(--red)':'var(--cyan)')+';" onclick="archToggleRez(\''+a.id+'\','+pi+')" '+(isDerezzed?'disabled':'')+'>'+(state.rezzed?'DEREZ':'REZ')+'</button>')+
+            (isDerezzed?'<button class="mini-btn" onclick="archRestoreProgram(\''+a.id+'\','+pi+')" title="Restore (2 NET Actions)">↺</button>':
+              '<button class="mini-btn" onclick="archDamageProgram(\''+a.id+'\','+pi+')" title="Take damage">−</button>')+
             '</div>';
         });
       }
@@ -5542,37 +5568,187 @@ function runArchitecture(id){
   html+='<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px;">'+
     esc(a.name)+' · '+diff.label+' · '+a.floors.length+' floors'+(a.owner?' · '+esc(a.owner):'')+'</div>';
 
-  /* elevator */
+  /* elevator with ICE REZ tracking */
   html+='<div class="na-elev">';
   a.floors.forEach((f,i)=>{
     const isCurrent=i===a.currentFloor && !f.cleared;
-    let content='',icon='',dv='',attackBtn='';
+    let content='',icon='',dv='',attackBtns='';
     if(f.type==='Empty'){ content='(empty)'; icon='·'; }
     else if(f.type==='Password'){ content='Password'; icon='🔒'; dv='DV '+f.dv; }
     else if(f.type==='File'){ content='File'; icon='📄'; dv='DV '+f.dv; }
     else if(f.type==='Control Node'){ content='Control Node'; icon='🎛'; dv='DV '+f.dv; }
     else if(f.type==='Black ICE'){
       const ice=BLACK_ICE.find(b=>b.name===f.ice);
-      content='ICE: '+f.ice+(ice?' (PER '+ice.per+' SPD '+ice.spd+' ATK '+ice.atk+' DEF '+ice.def+' REZ '+ice.rez+')':''); icon='⚠';
-      if(ice) attackBtn='<button class="mini-btn" style="background:rgba(255,138,146,.15);color:#ff8a92;" onclick="archIceAttack(\''+a.id+'\','+i+')" title="ICE attacks the runner">⚔</button>';
+      /* initialize REZ if needed */
+      if(ice && (f.rez==null || f.rezMax==null)){ f.rez=ice.rez; f.rezMax=ice.rez; }
+      const derez=f.rez!=null && f.rez<=0;
+      content='ICE: '+f.ice+(ice?' <span style="color:var(--muted);">(PER '+ice.per+' SPD '+ice.spd+' ATK '+ice.atk+' DEF '+ice.def+' REZ '+f.rez+'/'+f.rezMax+')</span>':'')+(derez?' <span style="color:var(--red);">DEREZZED</span>':''); icon='⚠';
+      if(ice && !derez){
+        attackBtns='<button class="mini-btn" style="background:rgba(255,138,146,.15);color:#ff8a92;" onclick="archIceAttack(\''+a.id+'\','+i+')" title="ICE attacks the runner">⚔</button>'+
+          '<button class="mini-btn" style="background:rgba(157,92,255,.15);color:#c9a4ff;" onclick="archAttackIce(\''+a.id+'\','+i+')" title="Runner attacks the ICE with a program">🎯</button>'+
+          '<button class="mini-btn" style="background:rgba(45,226,230,.12);color:var(--cyan);" onclick="archSlideCheck(\''+a.id+'\','+i+')" title="Slide away from ICE">⇤</button>';
+      }
     }
     else if(f.type==='Demon'){
       const dm=DEMONS.find(d=>d.name===f.demon);
-      content='Demon: '+f.demon+(dm?' (Iface '+dm.iface+' Acts '+dm.acts+' CN '+dm.cn+' REZ '+dm.rez+')':''); icon='👹';
-      if(dm) attackBtn='<button class="mini-btn" style="background:rgba(255,138,146,.15);color:#ff8a92;" onclick="archDemonZap(\''+a.id+'\','+i+')" title="Demon Zaps runner">⚡</button>';
+      if(dm && (f.rez==null || f.rezMax==null)){ f.rez=dm.rez; f.rezMax=dm.rez; }
+      const derez=f.rez!=null && f.rez<=0;
+      content='Demon: '+f.demon+(dm?' <span style="color:var(--muted);">(Iface '+dm.iface+' Acts '+dm.acts+' CN '+dm.cn+' REZ '+f.rez+'/'+f.rezMax+')</span>':'')+(derez?' <span style="color:var(--red);">DEREZZED</span>':''); icon='👹';
+      if(dm && !derez){
+        attackBtns='<button class="mini-btn" style="background:rgba(255,138,146,.15);color:#ff8a92;" onclick="archDemonZap(\''+a.id+'\','+i+')" title="Demon Zaps runner">⚡</button>'+
+          '<button class="mini-btn" style="background:rgba(157,92,255,.15);color:#c9a4ff;" onclick="archAttackIce(\''+a.id+'\','+i+')" title="Runner attacks the Demon">🎯</button>';
+      }
     }
     else if(f.type==='Custom'){ content=esc(f.notes||'Custom'); icon='?'; }
-    html+='<div class="na-floor'+(isCurrent?' current':'')+(f.cleared?' cleared':'')+'">'+
+    html+='<div class="na-floor'+(isCurrent?' current':'')+(f.cleared?' cleared':'')+'" style="flex-wrap:wrap;">'+
       '<span class="na-fn">F'+(i+1)+'</span>'+
       '<span class="na-ficon">'+icon+'</span>'+
       '<span class="na-fc">'+content+'</span>'+
       (dv?'<span class="na-fdv">'+dv+'</span>':'')+
-      attackBtn+
+      attackBtns+
       '<button class="mini-btn" onclick="archSetCurrent(\''+a.id+'\','+i+')" title="Netrunner is here">🧑‍💻</button>'+
       '<button class="mini-btn" onclick="archToggleCleared(\''+a.id+'\','+i+')" title="Toggle cleared">'+(f.cleared?'↺':'✓')+'</button></div>';
   });
   html+='</div>';
   showModal('▶ RUNNING: '+a.name,html);
+}
+
+/* NET Action tracking */
+function archSpendAction(archId){
+  const a=archFind(archId); if(!a) return;
+  a.netActionsUsed=(a.netActionsUsed||0)+1;
+  saveArchitectures(); runArchitecture(archId);
+}
+function archResetActions(archId){
+  const a=archFind(archId); if(!a) return;
+  a.netActionsUsed=0;
+  /* also reset per-turn program flags */
+  Object.keys(a.programStates||{}).forEach(k=>{
+    if(a.programStates[k]) a.programStates[k].usedThisTurn=false;
+  });
+  saveArchitectures(); runArchitecture(archId);
+  toast('New Turn — actions reset');
+}
+
+/* Program REZ management */
+function archToggleRez(archId,progIdx){
+  const a=archFind(archId); if(!a) return;
+  const runner=a.runnerId?rosterFind(a.runnerId):null;
+  const runnerRole=runner&&runner.roles?runner.roles.find(r=>r.role==='Netrunner'):null;
+  const iface=runnerRole&&runnerRole.data?runnerRole.data:null; if(!iface) return;
+  const allPrograms=[].concat(iface.deck1||[],iface.deck2Enabled?(iface.deck2||[]):[]);
+  const p=allPrograms[progIdx]; if(!p) return;
+  if(!a.programStates[progIdx]) a.programStates[progIdx]={rez:p.rez,rezMax:p.rez,rezzed:false,usedThisTurn:false};
+  const s=a.programStates[progIdx];
+  if(!s.rezzed && s.usedThisTurn){ toast('Already used this Turn'); return; }
+  s.rezzed=!s.rezzed;
+  if(s.rezzed) s.usedThisTurn=true;
+  saveArchitectures(); runArchitecture(archId);
+  toast(p.name+' '+(s.rezzed?'REZZED':'DEREZZED'));
+}
+function archDamageProgram(archId,progIdx){
+  const a=archFind(archId); if(!a) return;
+  const runner=a.runnerId?rosterFind(a.runnerId):null;
+  const runnerRole=runner&&runner.roles?runner.roles.find(r=>r.role==='Netrunner'):null;
+  const iface=runnerRole&&runnerRole.data?runnerRole.data:null; if(!iface) return;
+  const allPrograms=[].concat(iface.deck1||[],iface.deck2Enabled?(iface.deck2||[]):[]);
+  const p=allPrograms[progIdx]; if(!p) return;
+  const amt=parseInt(prompt('REZ damage to '+p.name+'?','1d6'));
+  if(!amt||isNaN(amt)) return;
+  if(!a.programStates[progIdx]) a.programStates[progIdx]={rez:p.rez,rezMax:p.rez,rezzed:false,usedThisTurn:false};
+  const s=a.programStates[progIdx];
+  s.rez=Math.max(0,s.rez-amt);
+  if(s.rez<=0){ s.rezzed=false; addLog(p.name+' DEREZZED'); toast(p.name+' DEREZZED'); }
+  else { addLog(p.name+' takes '+amt+' REZ ('+s.rez+'/'+s.rezMax+' left)'); }
+  saveArchitectures(); runArchitecture(archId);
+}
+function archRestoreProgram(archId,progIdx){
+  const a=archFind(archId); if(!a) return;
+  const runner=a.runnerId?rosterFind(a.runnerId):null;
+  const runnerRole=runner&&runner.roles?runner.roles.find(r=>r.role==='Netrunner'):null;
+  const iface=runnerRole&&runnerRole.data?runnerRole.data:null; if(!iface) return;
+  const allPrograms=[].concat(iface.deck1||[],iface.deck2Enabled?(iface.deck2||[]):[]);
+  const p=allPrograms[progIdx]; if(!p) return;
+  a.programStates[progIdx]={rez:p.rez,rezMax:p.rez,rezzed:false,usedThisTurn:false};
+  saveArchitectures(); runArchitecture(archId);
+  toast(p.name+' restored to full REZ (2 NET Actions)');
+}
+
+/* Runner attacks an ICE/Demon — pick which program to use */
+function archAttackIce(archId,floorIdx){
+  const a=archFind(archId); if(!a) return;
+  const f=a.floors[floorIdx]; if(!f) return;
+  const runner=a.runnerId?rosterFind(a.runnerId):null;
+  const runnerRole=runner&&runner.roles?runner.roles.find(r=>r.role==='Netrunner'):null;
+  const iface=runnerRole&&runnerRole.data?runnerRole.data:null;
+  if(!iface){ toast('No runner deck'); return; }
+  const allPrograms=[].concat(iface.deck1||[],iface.deck2Enabled?(iface.deck2||[]):[]);
+  const attackers=allPrograms.filter(p=>p.cls==='Attacker'||p.cls==='Black ICE');
+  if(!attackers.length){ toast('No attacker programs loaded'); return; }
+  const target=f.type==='Black ICE'?f.ice:f.demon;
+  let html='<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px;">Target: '+target+' (REZ '+f.rez+'/'+f.rezMax+')</div>';
+  html+='<div style="display:flex;flex-direction:column;gap:6px;">';
+  attackers.forEach((p,pi)=>{
+    const origIdx=allPrograms.indexOf(p);
+    html+='<button class="btn ghost" style="text-align:left;justify-content:flex-start;" onclick="archProgramVsIce(\''+a.id+'\','+floorIdx+','+origIdx+');document.getElementById(\'tempModal\').classList.remove(\'open\');setTimeout(()=>runArchitecture(\''+a.id+'\'),50);">'+
+      '<b>'+esc(p.name)+'</b> <span style="color:var(--muted);font-size:10px;">— '+p.cls+' · ATK '+p.atk+'</span></button>';
+  });
+  html+='</div>';
+  showModal('🎯 Attack '+target,html);
+}
+function archProgramVsIce(archId,floorIdx,progIdx){
+  const a=archFind(archId); if(!a) return;
+  const f=a.floors[floorIdx]; if(!f) return;
+  const runner=a.runnerId?rosterFind(a.runnerId):null;
+  const runnerRole=runner&&runner.roles?runner.roles.find(r=>r.role==='Netrunner'):null;
+  const iface=runnerRole&&runnerRole.data?runnerRole.data:null; if(!iface) return;
+  const allPrograms=[].concat(iface.deck1||[],iface.deck2Enabled?(iface.deck2||[]):[]);
+  const p=allPrograms[progIdx]; if(!p) return;
+  const rank=runnerRole.rank||0;
+  const attackRoll=randInt(10)+rank+(p.atk||0);
+  const defStat=f.type==='Black ICE'?(BLACK_ICE.find(b=>b.name===f.ice)||{}).def||0:0;
+  const defRoll=randInt(10)+defStat;
+  const hit=attackRoll>defRoll;
+  let msg=esc(runner.name)+' uses '+p.name+' on '+(f.ice||f.demon)+': '+attackRoll+' vs '+defRoll+' → '+(hit?'HIT':'MISS');
+  if(hit){
+    /* parse damage from notes (e.g. "3d6 REZ to Non-Black ICE Program") */
+    const dmgMatch=(p.notes||'').match(/(\d+)d6/);
+    let dmg=0;
+    if(dmgMatch){
+      const dice=parseInt(dmgMatch[1]);
+      const rolls=[]; for(let k=0;k<dice;k++){ const r=randInt(6); rolls.push(r); dmg+=r; }
+      msg+=' — '+dice+'d6 REZ damage: ['+rolls.join(',')+']='+dmg;
+    } else {
+      dmg=randInt(6);
+      msg+=' — 1d6 REZ damage: '+dmg;
+    }
+    f.rez=Math.max(0,(f.rez||f.rezMax)-dmg);
+    msg+=' → '+(f.ice||f.demon)+' REZ '+f.rez+'/'+f.rezMax;
+    if(f.rez<=0){
+      msg+=' — DEREZZED!';
+      f.cleared=true;
+    }
+    saveArchitectures();
+  }
+  addLog(msg,'shoot');
+  const brief=hit?p.name+' HITS '+(f.ice||f.demon)+' → '+(f.rez<=0?'DEREZZED!':'REZ '+f.rez+'/'+f.rezMax):p.name+' misses ('+attackRoll+' vs '+defRoll+')';
+  toast(brief);
+}
+
+/* Slide check — opposed roll */
+function archSlideCheck(archId,floorIdx){
+  const a=archFind(archId); if(!a) return;
+  const f=a.floors[floorIdx]; if(!f||f.type!=='Black ICE') return;
+  const ice=BLACK_ICE.find(b=>b.name===f.ice); if(!ice) return;
+  const runner=a.runnerId?rosterFind(a.runnerId):null;
+  const rank=runner&&runner.roles?(runner.roles.find(r=>r.role==='Netrunner')||{}).rank||0:0;
+  const runnerRoll=randInt(10)+rank;
+  const iceRoll=randInt(10)+ice.per;
+  const hit=runnerRoll>iceRoll;
+  const msg=(runner?esc(runner.name):'Runner')+' Slides vs '+f.ice+': Interface '+runnerRoll+' vs PER '+iceRoll+' → '+(hit?'SUCCESS — escape to adjacent floor':'FAIL — still engaged');
+  addLog(msg,'shoot');
+  toast('Slide '+(hit?'SUCCESS':'FAIL')+' — Interface '+runnerRoll+' vs PER '+iceRoll);
+  runArchitecture(archId);
 }
 
 /* Black ICE attacks the runner — rolls its ATK+d10 vs runner's Interface+d10, applies damage on hit */
@@ -5606,7 +5782,19 @@ function archIceAttack(archId,floorIdx){
     }
     msg+='\nEffect: '+ice.effect;
   }
-  addLog(msg,'shoot'); toast(f.ice+' '+(hit?'HITS':'misses')+(hit?' → see log':''));
+  addLog(msg,'shoot');
+  let brief=f.ice+' '+(hit?'HITS':'misses ('+iceRoll+' vs '+runnerRoll+')');
+  if(hit){
+    const dmgMatch=ice.effect.match(/^(\d+)d6/);
+    if(dmgMatch){
+      /* extract the last "= N" number from msg for the damage total */
+      const totalMatch=msg.match(/\]=(\d+)/);
+      brief=f.ice+' HITS → '+(totalMatch?totalMatch[1]+' brain dmg':'damage');
+    } else {
+      brief=f.ice+' HITS → '+esc(ice.effect.slice(0,40))+(ice.effect.length>40?'…':'');
+    }
+  }
+  toast(brief);
   runArchitecture(archId);
 }
 
@@ -5620,9 +5808,10 @@ function archDemonZap(archId,floorIdx){
   const demonRoll=randInt(10)+dm.iface;
   const runnerRoll=randInt(10)+rank;
   const hit=demonRoll>runnerRoll;
+  let dmg=0;
   let msg=dm.name+' Zaps '+(runner?esc(runner.name):'runner')+': Demon '+demonRoll+' vs Interface '+runnerRoll+' → '+(hit?'HIT':'MISS');
   if(hit){
-    const dmg=randInt(6);
+    dmg=randInt(6);
     msg+=' — 1d6 brain damage: '+dmg;
     if(runner){
       const combatant=combatants.find(c=>c.name===runner.name || (c.rosterId&&c.rosterId===runner.id));
@@ -5633,7 +5822,8 @@ function archDemonZap(archId,floorIdx){
       }
     }
   }
-  addLog(msg,'shoot'); toast(dm.name+' '+(hit?'HITS':'misses'));
+  addLog(msg,'shoot');
+  toast(hit?dm.name+' Zap HITS → '+dmg+' brain dmg':dm.name+' Zap misses ('+demonRoll+' vs '+runnerRoll+')');
   runArchitecture(archId);
 }
 
@@ -5668,7 +5858,7 @@ function archRollAbility(archId,ability){
   const d=randInt(10);
   const total=d+rank;
   const msg=esc(runner.name)+' — '+ability+': 1d10('+d+') + Interface('+rank+') = '+total;
-  addLog(msg); toast(ability+': '+total);
+  addLog(msg); toast(ability+' = '+total+' (d10:'+d+' + Iface:'+rank+')');
 }
 
 /* roll a program attack */
@@ -5685,13 +5875,9 @@ function archRollProgram(archId,progIdx){
   const d=randInt(10);
   const total=d+rank+(p.atk||0);
   const msg=esc(runner.name)+' — '+p.name+' attack: 1d10('+d+') + Interface('+rank+') + ATK('+p.atk+') = '+total;
-  addLog(msg); toast(p.name+': '+total);
+  addLog(msg); toast(p.name+' attack = '+total+' (d10:'+d+' + '+(rank+p.atk)+')');
 }
 
-/* placeholder for REZ tracking on non-attacker programs */
-function archRezProgram(archId,progIdx){
-  toast('Program REZ tracking — coming in Batch 3');
-}
 function archSetCurrent(id,floor){
   const a=archFind(id); if(!a) return;
   a.currentFloor=floor;
