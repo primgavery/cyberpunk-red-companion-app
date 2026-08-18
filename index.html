@@ -837,6 +837,7 @@
         <button role="menuitem" onclick="runTool(openVehicleCombatTools)">🚗 Vehicle combat</button>
         <button role="menuitem" onclick="runTool(openSaveLoad)">⇅ Save / load</button>
         <button role="menuitem" onclick="runTool(downloadFullBackup)">💾 Full backup</button>
+        <button role="menuitem" onclick="runTool(openCloudSync)">☁ Cloud sync (Gist)</button>
         <div class="sep"></div>
         <button role="menuitem" class="danger" onclick="runTool(clearEncounter)">✕ New encounter</button>
       </div>
@@ -5261,7 +5262,20 @@ function openDVReference(){
 
 /* ---- FULL BACKUP DOWNLOAD ---- */
 function downloadFullBackup(){
-  const data={
+  const data=buildBackupData();
+  const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const date=new Date().toISOString().slice(0,10);
+  a.href=url; a.download='cpred-backup-'+date+'.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Full backup downloaded');
+}
+
+/* ================ CLOUD SYNC (GitHub Gist) ================ */
+function buildBackupData(){
+  return {
     app:'cpred_full_backup',
     timestamp:new Date().toISOString(),
     combatants,
@@ -5273,14 +5287,137 @@ function downloadFullBackup(){
     vehicles:vehicles,
     architectures:architectures
   };
-  const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  const date=new Date().toISOString().slice(0,10);
-  a.href=url; a.download='cpred-backup-'+date+'.json';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  toast('Full backup downloaded');
+}
+function applyBackupData(data){
+  if(data.combatants) combatants=migrateCombatants(data.combatants);
+  if(Array.isArray(data.notes)) notesData=data.notes;
+  if(data.round) roundNo=data.round;
+  if(data.activeId!==undefined) activeId=data.activeId;
+  if(Array.isArray(data.log)) combatLog=data.log;
+  if(Array.isArray(data.roster)){ roster=data.roster; saveRoster(); }
+  if(Array.isArray(data.vehicles)){ vehicles=data.vehicles; saveVehicles(); }
+  if(Array.isArray(data.architectures)){ architectures=data.architectures; saveArchitectures(); }
+  save(); renderCombat(); renderNotes(); renderLog(); renderRoster(); renderVehicleList(); renderArchitectureList();
+}
+
+function openCloudSync(){
+  const token=store.get('cpred_gist_token')||'';
+  const gistId=store.get('cpred_gist_id')||'';
+  const lastSync=store.get('cpred_gist_last_sync')||'';
+  const tokenMask=token?'••••••••'+token.slice(-4):'';
+
+  const html='<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.6;">'+
+    'Sync your roster, vehicles, architectures, and encounter to a private GitHub Gist. '+
+    'Paste your personal access token once per device — it stays in this browser only.</div>'+
+
+    '<div class="field" style="margin-bottom:10px;"><label class="sl">GITHUB TOKEN (gist scope only)</label>'+
+    '<input type="password" id="gistToken" value="'+esc(token)+'" placeholder="ghp_..." autocomplete="off">'+
+    (token?'<div style="font-size:10px;color:var(--cyan);font-family:var(--mono);margin-top:2px;">Saved: '+tokenMask+'</div>':'')+
+    '</div>'+
+
+    '<div class="field" style="margin-bottom:10px;"><label class="sl">GIST ID (auto-set after first upload)</label>'+
+    '<input type="text" id="gistId" value="'+esc(gistId)+'" placeholder="auto-generated on first sync">'+
+    '<div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px;">Paste this ID on another device to sync to the same gist.</div>'+
+    '</div>'+
+
+    (lastSync?'<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:10px;">Last sync: '+esc(lastSync)+'</div>':'')+
+
+    '<div style="display:flex;gap:8px;margin-bottom:10px;">'+
+      '<button class="btn cyan" style="flex:1;" onclick="cloudSyncSave()">☁ SYNC TO GIST</button>'+
+      '<button class="btn ghost" style="flex:1;" onclick="cloudSyncLoad()">⇩ LOAD FROM GIST</button>'+
+    '</div>'+
+
+    '<div id="cloudSyncMsg" style="font-family:var(--mono);font-size:11px;color:var(--muted);min-height:16px;"></div>'+
+
+    '<details style="margin-top:12px;"><summary style="font-family:var(--mono);font-size:11px;color:var(--amber);cursor:pointer;">HELP · What is this?</summary>'+
+    '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:6px;line-height:1.6;">'+
+      '<b>First time (on any device):</b><br>'+
+      '1. Create a token at github.com/settings/tokens<br>'+
+      '2. Check only the "gist" scope, generate<br>'+
+      '3. Paste it above, hit SYNC TO GIST<br>'+
+      '4. A gist ID appears — copy it for other devices<br><br>'+
+      '<b>On another device:</b><br>'+
+      '1. Paste the same token<br>'+
+      '2. Paste the gist ID from your first device<br>'+
+      '3. Hit LOAD FROM GIST<br><br>'+
+      '<b>After that:</b> tap SYNC when you make changes, LOAD when you switch devices.'+
+    '</div></details>';
+
+  showModal('☁ CLOUD SYNC',html);
+}
+
+function cloudSyncSaveToken(){
+  const t=(document.getElementById('gistToken').value||'').trim();
+  const id=(document.getElementById('gistId').value||'').trim();
+  if(t) store.set('cpred_gist_token',t); else store.set('cpred_gist_token','');
+  if(id) store.set('cpred_gist_id',id); else store.set('cpred_gist_id','');
+  return {token:t,gistId:id};
+}
+
+async function cloudSyncSave(){
+  const msgEl=document.getElementById('cloudSyncMsg');
+  const {token,gistId}=cloudSyncSaveToken();
+  if(!token){ msgEl.textContent='⚠ Token required. Get one at github.com/settings/tokens (gist scope).'; return; }
+  msgEl.textContent='Uploading…';
+  const data=buildBackupData();
+  const body={
+    description:'Cyberpunk RED Companion — auto sync',
+    public:false,
+    files:{'cpred-backup.json':{content:JSON.stringify(data,null,1)}}
+  };
+  try{
+    const url=gistId?'https://api.github.com/gists/'+gistId:'https://api.github.com/gists';
+    const method=gistId?'PATCH':'POST';
+    const res=await fetch(url,{
+      method,
+      headers:{'Authorization':'token '+token,'Accept':'application/vnd.github+json','Content-Type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    if(!res.ok){
+      const err=await res.text();
+      msgEl.textContent='⚠ Upload failed ('+res.status+'). '+err.slice(0,120);
+      return;
+    }
+    const result=await res.json();
+    store.set('cpred_gist_id',result.id);
+    const stamp=new Date().toLocaleString();
+    store.set('cpred_gist_last_sync',stamp+' (uploaded)');
+    document.getElementById('gistId').value=result.id;
+    msgEl.textContent='✓ Synced. Gist ID: '+result.id;
+    toast('Synced to gist ✓');
+  } catch(e){
+    msgEl.textContent='⚠ Network error: '+e.message;
+  }
+}
+
+async function cloudSyncLoad(){
+  const msgEl=document.getElementById('cloudSyncMsg');
+  const {token,gistId}=cloudSyncSaveToken();
+  if(!token){ msgEl.textContent='⚠ Token required.'; return; }
+  if(!gistId){ msgEl.textContent='⚠ Gist ID required. Sync from another device first, or paste your gist ID.'; return; }
+  if(!confirm('LOAD FROM GIST will overwrite everything on this device with the cloud version. Continue?')) return;
+  msgEl.textContent='Downloading…';
+  try{
+    const res=await fetch('https://api.github.com/gists/'+gistId,{
+      headers:{'Authorization':'token '+token,'Accept':'application/vnd.github+json'}
+    });
+    if(!res.ok){
+      const err=await res.text();
+      msgEl.textContent='⚠ Download failed ('+res.status+'). '+err.slice(0,120);
+      return;
+    }
+    const result=await res.json();
+    const file=result.files&&result.files['cpred-backup.json'];
+    if(!file||!file.content){ msgEl.textContent='⚠ No backup file in that gist.'; return; }
+    let data; try{ data=JSON.parse(file.content); }catch(e){ msgEl.textContent='⚠ Backup file is corrupt.'; return; }
+    applyBackupData(data);
+    const stamp=new Date().toLocaleString();
+    store.set('cpred_gist_last_sync',stamp+' (loaded from '+(data.timestamp||'?')+')');
+    msgEl.textContent='✓ Loaded backup from '+(data.timestamp||'gist');
+    toast('Loaded from gist ✓');
+  } catch(e){
+    msgEl.textContent='⚠ Network error: '+e.message;
+  }
 }
 
 function vsExportVehicle(){
