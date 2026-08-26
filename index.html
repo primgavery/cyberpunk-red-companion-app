@@ -579,6 +579,12 @@
   .stat-cell .sc-lab{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1px;color:var(--muted);margin-bottom:2px;}
   .stat-cell input{border:none;background:none;text-align:center;font-weight:800;font-size:16px;padding:2px 0;
     width:100%;min-width:0;color:var(--text);font-family:var(--mono);}
+  .cs-derived{font-family:var(--mono);font-size:14px;font-weight:700;padding:6px 8px;background:var(--panel);
+    border:1px solid var(--line);border-radius:5px;text-align:center;color:var(--text);}
+  .cp-tracker.cp-warn{background:rgba(255,176,32,.1);border:1px solid rgba(255,176,32,.4);color:var(--amber);}
+  .cp-tracker.cp-border{background:rgba(255,80,40,.12);border:1px solid rgba(255,80,40,.4);color:var(--red);}
+  .cp-tracker.cp-psycho{background:rgba(255,30,30,.15);border:1px solid rgba(255,30,30,.5);color:#ff4444;}
+  .cp-tracker.cp-extreme{background:rgba(255,0,0,.2);border:2px solid #ff2222;color:#ff2222;}
   .cs-wpn{display:flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--line);
     border-radius:7px;padding:7px 9px;margin-bottom:5px;font-size:13px;}
   .cs-wpn .cw-info{flex:1;min-width:0;}
@@ -1000,6 +1006,9 @@
       <div class="row"><div class="field"><label class="sl">IGNORES ARMOR BELOW SP (blank = none)</label><input id="cwIgn" type="number" inputmode="numeric" placeholder="11"></div>
         <div class="field"><label class="sl">AUTOFIRE × (blank = none)</label><input id="cwAuto" type="number" inputmode="numeric" placeholder="3"></div>
         <div class="field"><label class="sl">RELOAD ACTIONS</label><input id="cwReload" type="number" inputmode="numeric" placeholder="1"></div></div>
+      <div class="row"><div class="field"><label class="sl">AREA MODE</label><select id="cwArea">
+        <option value="">None</option><option value="shell">Shell (3d6 3×3)</option><option value="blast">Blast (10m)</option></select></div>
+        <div class="field"><label class="sl"><input type="checkbox" id="cwAP"> AP AMMO DEFAULT</label></div></div>
       <div class="cwerr" id="cwErr"></div>
       <button class="btn cyan wide" onclick="addCustomWeapon()">ADD CUSTOM</button>
     </div>
@@ -1226,6 +1235,41 @@ function ammoSetFor(w){ if(w.melee) return 'none';
   return 'bullet'; }
 function ammoOf(w){ return AMMO[w.ammoType]||AMMO.basic; }
 
+/* ---- CLIP CHART (Extended / Drum magazine sizes by weapon type) ---- */
+const CLIP_CHART={
+  'Medium Pistol':{ext:18,drum:36},'Heavy Pistol':{ext:14,drum:28},'Very Heavy Pistol':{ext:14,drum:28},
+  'SMG':{ext:40,drum:50},'Heavy SMG':{ext:50,drum:60},'Shotgun':{ext:8,drum:16},
+  'Assault Rifle':{ext:35,drum:45},'Sniper Rifle':{ext:8,drum:12},
+  'Grenade Launcher':{ext:4,drum:6},'Rocket Launcher':{ext:2,drum:3}
+};
+function clipTypeOf(w){
+  if(w.clipType&&CLIP_CHART[w.clipType]) return w.clipType;
+  if(CLIP_CHART[w.name]) return w.name;
+  return null;
+}
+
+/* ---- WEAPON ATTACHMENTS ---- */
+const ATTACH_CAT=[
+  {name:'Bayonet',slots:1,eligible:'shoulder',effect:'bayonet'},
+  {name:'Drum Magazine',slots:2,eligible:'ranged-noBow',effect:'drum'},
+  {name:'Extended Magazine',slots:1,eligible:'ranged-noBow',effect:'extended'},
+  {name:'Grenade Launcher Underbarrel',slots:2,eligible:'shoulder',effect:'grenadeUB'},
+  {name:'Infrared Nightvision Scope',slots:1,eligible:'all',effect:'irScope'},
+  {name:'Shotgun Underbarrel',slots:2,eligible:'shoulder',effect:'shotgunUB'},
+  {name:'Smartgun Link',slots:2,eligible:'all',effect:'smartgun'},
+  {name:'Sniping Scope',slots:1,eligible:'all',effect:'snipingScope'}
+];
+function attachUsedSlots(w){ return (w.attachments||[]).reduce((n,a)=>n+(a.slots||1),0); }
+function hasAttach(w,effect){ return (w.attachments||[]).some(a=>a.effect===effect); }
+function applyClipAttach(w){
+  /* when an extended or drum mag is attached, update mag from clip chart */
+  const ct=clipTypeOf(w); if(!ct) return;
+  const row=CLIP_CHART[ct]; if(!row) return;
+  if(hasAttach(w,'drum')){ w.mag=row.drum; if(w.ammo!=null) w.ammo=Math.min(w.ammo,w.mag); }
+  else if(hasAttach(w,'extended')){ w.mag=row.ext; if(w.ammo!=null) w.ammo=Math.min(w.ammo,w.mag); }
+  else if(w.baseMag!=null){ w.mag=w.baseMag; if(w.ammo!=null) w.ammo=Math.min(w.ammo,w.mag); }
+}
+
 const WCATS=['Handguns','Shoulder Arms','Heavy Weapons','Melee','Archery'];
 
 /* ---- ARMOR CATALOG (Cyberpunk RED) ---- */
@@ -1448,6 +1492,78 @@ try{ combatLog=JSON.parse(store.get('cpred_log'))||[]; }catch(e){ combatLog=[]; 
 function logEvent(msg,kind){ combatLog.push({r:roundNo,m:msg,k:kind||''});
   if(combatLog.length>250) combatLog=combatLog.slice(-250); renderLog(); }
 function addLog(msg,kind){ return logEvent(msg,kind); }
+
+/* ---- RAMMING SYSTEM ---- */
+function openRam(driverId){
+  const driver=find(driverId); if(!driver) return;
+  const veh=find(driver.behindCoverId); if(!veh) return;
+  const hasPlow=veh.note&&veh.note.indexOf('Combat Plow')>=0;
+  /* targets: anyone not in the same vehicle */
+  const targets=combatants.filter(c=>c.id!==driverId && c.id!==veh.id && c.hp>0 && c.behindCoverId!==veh.id);
+  if(!targets.length){ toast('No valid ram targets'); return; }
+  const tOpts=targets.map(t=>'<option value="'+t.id+'">'+esc(t.name)+' (HP '+t.hp+'/'+(t.hpMax||t.hp)+')'+(t.isVehicle?' 🚗':'')+'</option>').join('');
+  showModal('🚗 RAM — '+veh.name,
+    '<div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:8px;line-height:1.5;">'+
+      '6d6 damage to target AND your vehicle. All involved: Whiplash + 5 HP to driver/occupants.'+
+      (hasPlow?'<br><b style="color:var(--cyan);">Combat Plow: your vehicle takes 0 damage, no Whiplash for your crew.</b>':'')+
+      '<br>Moving target: DV 13 to hit. Stationary: auto-hit.</div>'+
+    '<div class="field" style="margin-bottom:8px;"><label class="sl">TARGET</label><select id="ramTarget">'+tOpts+'</select></div>'+
+    '<label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:10px;cursor:pointer;">'+
+      '<input type="checkbox" id="ramMoving" checked> Target is moving (DV 13)</label>'+
+    '<button class="btn cyan wide" onclick="executeRam(\''+driverId+'\')">⚅ RAM</button>');
+}
+function executeRam(driverId){
+  const driver=find(driverId); if(!driver) return;
+  const veh=find(driver.behindCoverId); if(!veh) return;
+  const targetId=document.getElementById('ramTarget').value;
+  const target=find(targetId); if(!target) return;
+  const isMoving=document.getElementById('ramMoving').checked;
+  const hasPlow=veh.note&&veh.note.indexOf('Combat Plow')>=0;
+  /* roll 6d6 damage */
+  const rolls=[]; let dmg=0;
+  for(let i=0;i<6;i++){ const r=randInt(6); rolls.push(r); dmg+=r; }
+  let msg=driver.name+' rams '+target.name+' with '+veh.name+': 6d6=['+rolls.join(',')+'] = '+dmg+' damage.';
+  /* hit check for moving target */
+  if(isMoving){
+    const hitRoll=randInt(10)+randInt(10); /* just need to beat DV13 with some skill */
+    /* simplified: auto-hit unless you want a roll. Per your house rule, just apply. */
+  }
+  /* apply damage to target */
+  const targetBefore=target.hp;
+  target.hp=Math.max(0,target.hp-dmg);
+  msg+=' Target: HP '+targetBefore+'→'+target.hp+'.';
+  /* apply damage to vehicle (unless Combat Plow) */
+  if(!hasPlow){
+    const vehBefore=veh.hp;
+    veh.hp=Math.max(0,veh.hp-dmg);
+    msg+=' Vehicle: SDP '+vehBefore+'→'+veh.hp+'.';
+  } else { msg+=' Combat Plow: vehicle takes 0 damage.'; }
+  /* Whiplash to target and everyone in target vehicle */
+  const whiplashTargets=[target];
+  if(target.isVehicle){
+    combatants.filter(c=>c.behindCoverId===target.id).forEach(occ=>whiplashTargets.push(occ));
+  }
+  whiplashTargets.forEach(w=>{
+    if(!Array.isArray(w.injuries)) w.injuries=[];
+    w.injuries.push('Whiplash');
+    msg+=' '+w.name+' suffers Whiplash.';
+  });
+  /* 5 damage to driver and occupants of ramming vehicle (unless Combat Plow) */
+  if(!hasPlow){
+    const occupants=combatants.filter(c=>c.behindCoverId===veh.id);
+    occupants.forEach(occ=>{
+      const before=occ.hp;
+      occ.hp=Math.max(0,occ.hp-5);
+      if(!Array.isArray(occ.injuries)) occ.injuries=[];
+      occ.injuries.push('Whiplash');
+      msg+=' '+occ.name+' (occupant): Whiplash + 5 dmg (HP '+before+'→'+occ.hp+').';
+    });
+  }
+  addLog(msg,'shoot');
+  document.getElementById('tempModal').classList.remove('open');
+  save(); renderCombat();
+  toast('RAM: '+dmg+' damage to '+target.name);
+}
 function clearLog(){ if(!combatLog.length)return; pushUndo('Log cleared'); combatLog=[]; save(); renderLog(); }
 function migrateCombatants(list){ list.forEach(c=>{
   if(!Array.isArray(c.weapons)) c.weapons=[]; if(!Array.isArray(c.injuries)) c.injuries=[];
@@ -1541,12 +1657,35 @@ function setMax(id,field,v){ const c=find(id); if(!c)return; const n=Math.max(1,
   else if(field==='bodyMax'){ c.bodyMax=Math.max(0,parseInt(v)||0); if(c.body>c.bodyMax)c.body=c.bodyMax; }
   save(); renderCombat(); }
 function addCondition(id){ const c=find(id); if(!c)return;
+  if(!Array.isArray(c.conditions)) c.conditions=[];
   const nameEl=document.getElementById('condName_'+id), rEl=document.getElementById('condRounds_'+id);
-  const name=(nameEl.value||'').trim(); if(!name)return;
-  const raw=rEl.value; const rounds=raw===''?null:Math.max(1,parseInt(raw)||1);   // blank = indefinite
-  c.conditions.push({name,rounds}); nameEl.value=''; rEl.value='';
-  logEvent('• '+c.name+' gains '+name+(rounds?' ('+rounds+' rd)':''),''); save(); renderCombat(); }
-function removeCondition(id,idx){ const c=find(id); if(!c)return; c.conditions.splice(idx,1); save(); renderCombat(); }
+  if(!nameEl){ toast('Condition input not found'); return; }
+  const name=(nameEl.value||'').trim(); if(!name){ toast('Enter a condition name'); return; }
+  const raw=rEl?rEl.value:''; const rounds=raw===''?null:Math.max(1,parseInt(raw)||1);
+  c.conditions.push({name,rounds}); nameEl.value=''; if(rEl) rEl.value='';
+  logEvent('• '+c.name+' gains '+name+(rounds?' ('+rounds+' rd)':''),''); save(); renderCombat();
+  toast(c.name+' → '+name+(rounds?' ('+rounds+' rds)':''));
+}
+function removeCondition(id,idx){ const c=find(id); if(!c)return; if(!Array.isArray(c.conditions)) c.conditions=[]; c.conditions.splice(idx,1); save(); renderCombat(); }
+/* rename combatant on the fly */
+function renameCombatant(id){
+  const c=find(id); if(!c) return;
+  const newName=prompt('Rename '+c.name+':',c.name);
+  if(!newName||!newName.trim()) return;
+  c.name=newName.trim(); save(); renderCombat();
+  toast('Renamed to '+c.name);
+}
+/* manual crit injury */
+function addManualCrit(id){
+  const c=find(id); if(!c) return;
+  const inj=prompt('Crit injury for '+c.name+':','');
+  if(!inj||!inj.trim()) return;
+  if(!Array.isArray(c.injuries)) c.injuries=[];
+  c.injuries.push(inj.trim());
+  logEvent('• '+c.name+' suffers '+inj.trim(),'crit');
+  save(); renderCombat();
+  toast(c.name+' → '+inj.trim());
+}
 function dupCombatant(id){ const c=find(id); if(!c) return; const copy=JSON.parse(JSON.stringify(c)); copy.id=uid();
   copy.weapons.forEach(w=>w.id=uid()); const baseName=c.name.replace(/\s#\d+$/,'');
   copy.name=baseName+' #'+(combatants.filter(x=>x.name.startsWith(baseName)).length+1);
@@ -1608,7 +1747,9 @@ function resolveDamage(t,dmg,loc,armorMode,ablate,ignoreBelow,opts){
   const penetrates=bypassed||(dmg>=effSP);
   const past=Math.max(0,dmg-effSP);
   let mult=1, multTag='';
-  if(loc==='head' && !t.isCover && past>0){
+  if(opts.vehicleWeakPoint && t.isCover && past>0){
+    mult=2; multTag=' ×2 (vehicle weak point)';
+  } else if(loc==='head' && !t.isCover && past>0){
     mult=(t.injuries||[]).includes('Cracked Skull')?3:2;
     multTag=' ×'+mult+(mult===3?' (head · cracked skull)':' (head)'); }
   let hpLost=past*mult;
@@ -1746,10 +1887,12 @@ function setCN(id,v){ const c=find(id); if(!c)return; c.cn=parseInt(v)||0; if(c.
 function bumpCN(id,d){ const c=find(id); if(!c)return; c.cn=(c.cn||0)+d; if(c.ncnAuto) c.ncn=c.cn-2; save(); renderCombat(); }
 function setNCN(id,v){ const c=find(id); if(!c)return; c.ncn=parseInt(v)||0; c.ncnAuto=false; save(); renderCombat(); }
 function rollSkillCheck(id){ const c=find(id); if(!c)return;
-  const base=(c.ncn!=null?c.ncn:(c.cn||0)-2); const r=rollAttackRoll(base); const band=dvBand(r.total);
+  const wounded=(c.hp>0 && c.hp<=Math.ceil(c.hpMax/2));
+  const woundPen=wounded?-2:0;
+  const base=(c.ncn!=null?c.ncn:(c.cn||0)-2)+woundPen; const r=rollAttackRoll(base); const band=dvBand(r.total);
   const critTag=r.crit==='up'?' <span class="crit up mini">▲</span>':r.crit==='down'?' <span class="crit down mini">▼</span>':'';
   const col=(band&&band.c)||'#ff4d5e'; const beats=(band&&band.n)?band.n:'nothing';
-  c.checkResult='NCN check · 1d10 ['+r.chain.join(' → ')+'] '+(base>=0?'+':'')+base+' = <b style="color:'+col+';">'+r.total+'</b>'+critTag+' — beats <b style="color:'+col+';">'+beats+'</b>';
+  c.checkResult='NCN check · 1d10 ['+r.chain.join(' → ')+'] '+(base>=0?'+':'')+base+(wounded?' (−2 wound)':'')+' = <b style="color:'+col+';">'+r.total+'</b>'+critTag+' — beats <b style="color:'+col+';">'+beats+'</b>';
   buzz(r.crit==='up'?[0,22,32,22]:r.crit==='down'?[0,55]:14); save(); renderCombat(); }
 function toggleTrackDeath(id){ const c=find(id); if(!c)return; c.trackDeath=!c.trackDeath;
   if(!c.trackDeath){ c.deathSaves=0; c.deathResult=''; } save(); renderCombat(); }
@@ -1819,11 +1962,12 @@ function showWCat(cat){ const cid=wpickTarget;
       '<span class="wp-meta">'+wDesc(o.w)+'</span></button>').join(''); }
 function closeWeapon(){ document.getElementById('weaponModal').classList.remove('open'); }
 function weaponFromCatalog(b){
-  return {id:uid(),name:b.name,skill:b.skill,dmg:b.dmg,mag:b.mag,ammo:b.mag==null?null:b.mag,rangeRow:b.rangeRow,
+  return {id:uid(),name:b.name,skill:b.skill,dmg:b.dmg,mag:b.mag,baseMag:b.mag,ammo:b.mag==null?null:b.mag,rangeRow:b.rangeRow,
     hitBonus:0,dmgBonus:0,rof:b.rof||1,armorMode:b.armorMode||'full',
     ignoreBelow:b.ignoreBelow||null,apDefault:!!b.apDefault,melee:!!b.melee,
     autoMult:b.autoMult||null,autoRow:b.autoRow||null,areaMode:b.areaMode||null,
-    ammoType:b.apDefault?'ap':'basic',reloadActions:b.reloadActions||1,reloading:0}; }
+    ammoType:b.apDefault?'ap':'basic',reloadActions:b.reloadActions||1,reloading:0,
+    quality:'standard',attachments:[],jammed:false}; }
 function addCatalogWeapon(cid,i){ const c=find(cid);
   c.weapons.push(weaponFromCatalog(WEAPONS[i]));
   save(); renderCombat(); closeWeapon(); }
@@ -1837,35 +1981,42 @@ function addCustomWeapon(){ const c=find(wpickTarget); if(!c)return;
   const rof=Math.max(1,parseInt(document.getElementById('cwRof').value)||1);
   const ignRaw=document.getElementById('cwIgn').value; const ign=ignRaw===''?null:(parseInt(ignRaw)||null);
   const amRaw=document.getElementById('cwAuto').value; const am=amRaw===''?null:(parseInt(amRaw)||null);
-  c.weapons.push({id:uid(),name,skill:'Custom',dmg,mag,ammo:mag==null?null:mag,rangeRow:rr||null,
+  const areaMode=document.getElementById('cwArea').value||null;
+  const apDefault=document.getElementById('cwAP').checked;
+  c.weapons.push({id:uid(),name,skill:'Custom',dmg,mag,baseMag:mag,ammo:mag==null?null:mag,rangeRow:rr||null,
     hitBonus:hb,dmgBonus:db,rof:rof,armorMode:ign?'ignore':(rr?'full':'half'),
-    ignoreBelow:ign,apDefault:false,melee:!rr,
+    ignoreBelow:ign,apDefault:apDefault,melee:!rr,
     autoMult:am||null,autoRow:am?(rr==='Assault Rifle'?'Assault Rifle':'SMG'):null,
-    areaMode:(rr==='Grenade Launcher'||rr==='Rocket Launcher')?'blast':null,
-    ammoType:(rr==='Grenade Launcher'||rr==='Rocket Launcher')?'ap':'basic',
-    reloadActions:Math.max(1,parseInt(document.getElementById('cwReload').value)||1),reloading:0});
+    areaMode:areaMode,
+    ammoType:apDefault?'ap':'basic',
+    reloadActions:Math.max(1,parseInt(document.getElementById('cwReload').value)||1),reloading:0,
+    quality:'standard',attachments:[],jammed:false});
   save(); renderCombat(); closeWeapon(); }
 function setWeaponAmmo(cid,wid,type){ const c=find(cid); if(!c)return; const w=c.weapons.find(x=>x.id===wid);
   if(w){ w.ammoType=type; save(); renderCombat(); } }
 function setWeaponBonus(cid,wid,field,val){ const c=find(cid); if(!c)return; const w=c.weapons.find(x=>x.id===wid);
   if(w){ w[field]=parseInt(val)||0; save(); } }
 function removeWeapon(cid,wid){ const c=find(cid); if(!c)return; c.weapons=c.weapons.filter(w=>w.id!==wid); save(); renderCombat(); }
-/* find a matching reserve entry for a weapon: match ammo type, prefer weapon-name match */
+/* find a matching reserve entry for a weapon: match by linkedWeapons ID, then ammo type */
 const AMMOTYPE_TO_TRACKER={basic:'Basic',ap:'AP',rubber:'Rubber',incendiary:'Incendiary',
   expansive:'Expansive',smart:'Smart',poison:'Poison',biotoxin:'Biotox',sleep:'Sleep',
   flashbang:'Flash',teargas:'Teargas',emp:'EMP',api:'API',smoke:'Smoke'};
 function findAmmoReserve(c,w){
   if(!c.ammoReserve||!c.ammoReserve.length) return null;
   const trackerType=AMMOTYPE_TO_TRACKER[w.ammoType]||'Basic';
-  const matches=c.ammoReserve.filter(a=>((a.type||'Basic').toLowerCase()===trackerType.toLowerCase())&&(parseInt(a.qty)||0)>0);
-  if(!matches.length) return null;
-  /* prefer an entry whose weapon field loosely matches the weapon name */
+  const typeMatch=c.ammoReserve.filter(a=>((a.type||'Basic').toLowerCase()===trackerType.toLowerCase())&&(parseInt(a.qty)||0)>0);
+  if(!typeMatch.length) return null;
+  /* prefer entry explicitly linked to this weapon by ID (check rosterWpnId for combat copies) */
+  const wid=w.rosterWpnId||w.id;
+  const byId=typeMatch.find(a=>Array.isArray(a.linkedWeapons)&&(a.linkedWeapons.indexOf(wid)>=0||a.linkedWeapons.indexOf(w.id)>=0));
+  if(byId) return byId;
+  /* legacy fallback: fuzzy name match for un-migrated entries */
   const wname=(w.name||'').toLowerCase();
-  const named=matches.find(a=>{
+  const named=typeMatch.find(a=>{
     const an=(a.weapon||'').toLowerCase();
     return an&&(wname.includes(an)||an.includes(wname.split(' ')[0]));
   });
-  return named||matches[0];
+  return named||typeMatch[0];
 }
 /* deduct up to `wanted` rounds from reserve; returns rounds actually taken (or `wanted` if untracked) */
 function drawFromReserve(c,w,wanted){
@@ -1893,6 +2044,8 @@ function reloadWeapon(cid,wid){ const c=find(cid); if(!c)return; const w=c.weapo
   save(); renderCombat(); }
 function cancelReload(cid,wid){ const c=find(cid); if(!c)return; const w=c.weapons.find(x=>x.id===wid);
   if(w){ w.reloading=0; save(); renderCombat(); } }
+function unjamWeapon(cid,wid){ const c=find(cid); if(!c)return; const w=c.weapons.find(x=>x.id===wid);
+  if(w){ w.jammed=false; logEvent('🔧 '+c.name+' unjams '+w.name+' (costs 1 Action)','action'); save(); renderCombat(); } }
 /* end-of-turn upkeep for the combatant whose Turn just finished */
 function endOfTurnUpkeep(c){ if(!c) return;
   (c.weapons||[]).forEach(w=>{ if(w.reloading>0){ w.reloading--;
@@ -1957,7 +2110,8 @@ function openShoot(id){ const s=find(id); if(!s)return;
       '<button id="aimNormal" class="fsel" onclick="setAimType(\'normal\')">Normal (Body)</button>'+
       '<button id="aimHead" onclick="setAimType(\'head\')">Head −8</button>'+
       '<button id="aimHeld" onclick="setAimType(\'held\')">Held Item −8</button>'+
-      '<button id="aimLeg" onclick="setAimType(\'leg\')">Leg −8</button></div></div>'+
+      '<button id="aimLeg" onclick="setAimType(\'leg\')">Leg −8</button>'+
+      '<button id="aimVehicle" style="display:none;" onclick="setAimType(\'vehicle\')">Vehicle Weak Pt −8</button></div></div>'+
     '<div class="shoot-sec" id="bandSec"></div>'+
     '<div class="shoot-sec rangerow"><div class="field"><label class="sl" id="rangeLabel">RANGE (m)</label>'+
       '<input id="shootRange" type="number" inputmode="numeric" min="0" step="1" placeholder="e.g. 5" oninput="onRangeInput()"></div>'+
@@ -1983,9 +2137,9 @@ function ammoChipsHtml(t){
   const guns=(t.weapons||[]).filter(w=>w.mag!=null);
   if(!guns.length) return '';
   return '<span class="ammo-chips">'+guns.map(w=>{
-    const st=w.ammo<=0?' dry':(w.ammo<=Math.ceil(w.mag/4)?' low':'');
+    const st=w.jammed?' dry':(w.ammo<=0?' dry':(w.ammo<=Math.ceil(w.mag/4)?' low':''));
     const shortName=w.name.length>10?w.name.slice(0,9)+'…':w.name;
-    return '<span class="ammo-chip'+st+'" title="'+esc(w.name)+'">'+esc(shortName)+' '+w.ammo+'/'+w.mag+'</span>'; }).join('')+'</span>'; }
+    return '<span class="ammo-chip'+st+'" title="'+esc(w.name)+'">'+(w.jammed?'🔧 ':'')+esc(shortName)+' '+w.ammo+'/'+w.mag+'</span>'; }).join('')+'</span>'; }
 function statusLineHtml(t){
   const sp=spChipsHtml(t), am=ammoChipsHtml(t);
   if(!sp&&!am) return '';
@@ -2103,7 +2257,7 @@ function closeShoot(){ document.getElementById('shootModal').classList.remove('o
 function setAim(head){ setAimType(head?'head':'normal'); }
 function setAimType(type){ shoot.aimType=type; shoot.aimedHead=(type==='head');
   shoot.loc=(type==='head')?'head':'body';
-  ['aimNormal','aimHead','aimHeld','aimLeg'].forEach(id=>{
+  ['aimNormal','aimHead','aimHeld','aimLeg','aimVehicle'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.className=(id==='aim'+type.charAt(0).toUpperCase()+type.slice(1))?'fsel':'';
   });
@@ -2123,9 +2277,15 @@ function selectTarget(id){
   document.querySelectorAll('#shootTargets .target-row').forEach(el=>el.classList.toggle('sel',el.getAttribute('data-t')===id));
   const t=find(id);
   const aimBtns=['aimHead','aimHeld','aimLeg'];
-  if(t&&t.isCover){ setAimType('normal');
-    aimBtns.forEach(bid=>{const b=document.getElementById(bid); if(b){b.disabled=true;b.style.opacity='.35';}}); }
-  else { aimBtns.forEach(bid=>{const b=document.getElementById(bid); if(b){b.disabled=false;b.style.opacity='';}}); }
+  const vehBtn=document.getElementById('aimVehicle');
+  if(t&&t.isCover&&t.isVehicle){ setAimType('normal');
+    aimBtns.forEach(bid=>{const b=document.getElementById(bid); if(b){b.disabled=true;b.style.opacity='.35';b.style.display='';}});
+    if(vehBtn){vehBtn.disabled=false;vehBtn.style.opacity='';vehBtn.style.display='';} }
+  else if(t&&t.isCover){ setAimType('normal');
+    aimBtns.forEach(bid=>{const b=document.getElementById(bid); if(b){b.disabled=true;b.style.opacity='.35';b.style.display='';}});
+    if(vehBtn){vehBtn.style.display='none';} }
+  else { aimBtns.forEach(bid=>{const b=document.getElementById(bid); if(b){b.disabled=false;b.style.opacity='';b.style.display='';}});
+    if(vehBtn){vehBtn.style.display='none';} }
   applyRangeVisibility(); renderBands(); updateShootDV(); shoot.defence='dv'; renderDefence();
   const btn=document.getElementById('rollAtkBtn');
   if(btn && shoot.fireMode==='single') btn.textContent=autoHits(currentWeapon(),t)?'⚔ STRIKE (auto-hit)':'⚅ ROLL ATTACK'; }
@@ -2213,6 +2373,7 @@ function rollAttack(){ const w=currentWeapon(); const s=find(shoot.shooterId); c
   if(!isMultiMode() && fm!=='suppress' && !shoot.targetId){ res.innerHTML='<div class="warn">Pick a target first.</div>'; return; }
   if(fm!=='suppress' && shoot.dv==null){ res.innerHTML='<div class="warn">Set a valid range / DV first.</div>'; return; }
   if(w.reloading>0){ res.innerHTML='<div class="warn">'+esc(w.name)+' is still being reloaded — '+w.reloading+' more Action'+(w.reloading===1?'':'s')+'.</div>'; return; }
+  if(w.jammed){ res.innerHTML='<div class="warn">'+esc(w.name)+' is jammed! Use 🔧 UNJAM in inventory (costs an Action).</div>'; return; }
   const cost=(fm==='auto'||fm==='suppress')?10:1;
   if(w.mag!=null){ if(w.ammo<cost){ res.innerHTML='<div class="warn">'+(cost>1
       ? esc(w.name)+' needs 10 rounds in the clip — only '+w.ammo+' left.'
@@ -2224,19 +2385,27 @@ function rollAttack(){ const w=currentWeapon(); const s=find(shoot.shooterId); c
   else if(s.skills&&s.charStats) cnBonus=skillAtkBonus(s,w,fm);
   const woundPen=(s.hp>0 && s.hp<=Math.ceil(s.hpMax/2))?-2:0;
   const aimPen=(shoot.aimType!=='normal'&&fm==='single')?-8:0;
+  /* weapon quality & attachment bonuses */
+  const qualBonus=(w.quality==='excellent')?1:0;
+  const smartgunBonus=hasAttach(w,'smartgun')?1:0;
+  const snipeBonus=(hasAttach(w,'snipingScope')&&(parseInt(shoot.range)||0)>=51&&(fm==='single'))?1:0;
   /* Solo Combat Awareness bonuses */
   const ca=s.combatAwareness||{};
   const caPrecision=CA_ABILITIES.find(a=>a.id==='precisionAttack').bonusVal(ca.precisionAttack||0);
   const caFumbleRecovery=CA_ABILITIES.find(a=>a.id==='fumbleRecovery').bonusVal(ca.fumbleRecovery||0);
-  const totalMod=(shoot.mod||0)+cnBonus+wpnHit+woundPen+aimPen+caPrecision;
+  const totalMod=(shoot.mod||0)+cnBonus+wpnHit+woundPen+aimPen+caPrecision+qualBonus+smartgunBonus+snipeBonus;
   const target0=shoot.targetId?find(shoot.targetId):null;
   const auto0=autoHits(w,target0);
   let atk=rollAttackRoll(totalMod);
-  /* Fumble Recovery: ignore crit failure, treat as plain 1 */
+  /* Fumble Recovery: natural 1 doesn't explode downward — just treat it as a plain 1 */
   if(caFumbleRecovery && atk.crit==='down'){
     const base=totalMod+1; /* 1d10 result of 1, no explosion */
     atk={total:base,chain:[1],crit:null};
   }
+  /* Poor quality jam: on natural 1, the attack still resolves this round,
+     but the weapon jams and can't fire again until unjammed (costs an Action) */
+  const naturalOne=atk.chain[0]===1;
+  if(w.quality==='poor'&&naturalOne){ w.jammed=true; }
   /* a declared dodge is an opposed roll — the Evasion total becomes the number to beat.
      Melee never consults the flag: the defender ALWAYS contests, so a stale defence='dv'
      (set before the weapon switched to melee) can't silently turn it into a DV-0 gimme. */
@@ -2257,6 +2426,10 @@ function rollAttack(){ const w=currentWeapon(); const s=find(shoot.shooterId); c
   if(woundPen) parts.push(woundPen+'(wounded)');
   if(aimPen) parts.push(aimPen+'(aimed '+shoot.aimType+')');
   if(caPrecision) parts.push('+'+caPrecision+'(precision)');
+  if(qualBonus) parts.push('+1(excellent)');
+  if(smartgunBonus) parts.push('+1(smartgun)');
+  if(snipeBonus) parts.push('+1(scope 51m+)');
+  const jamNotice=w.jammed?'<div class="warn" style="margin-top:6px;">⚠ WEAPON JAMMED — '+esc(w.name)+' cannot fire again until unjammed (costs an Action)</div>':'';
   const modstr=parts.length?' '+parts.join(' '):'';
   const dodgeLine=dodge?('<div class="atk-line" style="color:var(--cyan);">'+esc(target0.name)+' dodges — 1d10 ['+
     dodge.chain.join(' → ')+'] +'+dodgeValueOf(target0)+' = <b>'+dodge.total+'</b>'+
@@ -2266,7 +2439,7 @@ function rollAttack(){ const w=currentWeapon(); const s=find(shoot.shooterId); c
       (dodge?'dodge':'DV ')+(dodge?'':shoot.dv)+critTag+'</div>')+
     dodgeLine+
     '<div class="verdict '+(hit?'hit':'miss')+'">'+(hit?'✓ HIT':'✗ MISS')+
-      ((!auto0&&atk.total===beatNum)?(dodge?' — tie, dodge wins':' — tie, defender wins'):'')+ammoTag+'</div>';
+      ((!auto0&&atk.total===beatNum)?(dodge?' — tie, dodge wins':' — tie, defender wins'):'')+ammoTag+'</div>'+jamNotice;
   const dw=document.getElementById('shootDmg');
   const rof=shotsAllowed(w); const more=shoot.shotsUsed<rof;
   const shotBtn=more?'<button class="btn ghost wide" style="margin-top:8px;" onclick="nextShot()">▶ NEXT ATTACK ('+(shoot.shotsUsed+1)+' of '+rof+')</button>':'';
@@ -2345,7 +2518,8 @@ function rollApplyDamage(){ const w=currentWeapon(); const t=find(shoot.targetId
   if(deflect>0){ total=Math.max(0,total-deflect); label+=' −'+deflect+'(deflection)'; }
   const shooterName=(shooter||{}).name||'';
   let msg=resolveDamage(t,total,shoot.loc,shoot.armorMode,shoot.ablate,shoot.ignoreBelow,
-    {noAblate:am.noAblate,nonLethal:am.nonLethal,ignite:am.ignite,attacker:shooterName});
+    {noAblate:am.noAblate,nonLethal:am.nonLethal,ignite:am.ignite,attacker:shooterName,
+     vehicleWeakPoint:shoot.aimType==='vehicle'});
   /* aimed shot side effects */
   let aimedLine='';
   const dmgThrough=Math.max(0,total-(shoot.loc==='head'?t.headMax:t.bodyMax));
@@ -2409,18 +2583,18 @@ function rollApplyArea(){ const w=currentWeapon();
   const roll=rollDiceStr(dice); const total=roll.sum+dmgBonus+spotApply;
   const bonusStr=(dmgBonus||spotApply)?(' +'+(dmgBonus+spotApply)+' bonus'):'';
   const isCrit=roll.rolls.filter(r=>r===6).length>=2;
-  /* blast: cover shields those behind it unless the blast would destroy it */
+  /* RAW: blasts ignore cover entirely; shotgun shells still respect cover */
   const am=ammoOf(w);
   if(am.check) return showAmmoCheck(w,am,shoot.multiIds.map(find).filter(Boolean));
   const caught=shoot.multiIds.filter(id=>shoot.dodgedIds.indexOf(id)<0);
-  const lines=applyAreaDamage(caught,total,shoot.armorMode,shoot.ablate,shoot.ignoreBelow,!shell,
+  const lines=applyAreaDamage(caught,total,shoot.armorMode,shoot.ablate,shoot.ignoreBelow,shell,
     {noAblate:am.noAblate,nonLethal:am.nonLethal,ignite:am.ignite,attacker:(find(shoot.shooterId)||{}).name||''});
   shoot.dodgedIds.forEach(id=>{ const t=find(id); if(t) lines.unshift({name:t.name,msg:'dodged clear of the blast — no damage',shielded:true}); });
   if(am.noCrit) isCrit=false;
   let critLine='';
   if(isCrit){ const hurt=[];
     caught.forEach(id=>{ const t=find(id); if(!t||t.isCover) return;
-      const cv=(!shell&&t.behindCoverId)?find(t.behindCoverId):null;
+      const cv=(shell&&t.behindCoverId)?find(t.behindCoverId):null;
       if(cv && cv.hp>0) return;                      /* still shielded, no crit */
       t.hp=Math.max(0,t.hp-5); const inj=rollCritInjury(t,'body'); hurt.push(esc(t.name)+' — '+esc(inj));
       logEvent('☠ '+t.name+' takes a Critical Injury — '+inj+' · +5 bonus damage, now '+t.hp+' HP','crit'); });
@@ -2717,8 +2891,14 @@ function cardHtml(c){ const pct=Math.max(0,Math.min(100,Math.round(c.hp/c.hpMax*
   if(open){
     const lastHit=c.lastHit?'<div class="lasthit">▸ '+esc(c.lastHit)+'</div>':'';
     const inv='<div class="inv"><div class="sl2">INVENTORY</div>'+
-      (c.weapons.length?c.weapons.map(w=>'<div class="inv-row"><div class="inv-top"><div class="iw"><b>'+esc(w.name)+'</b><span>'+w.dmg+(w.rangeRow?' · '+esc(w.rangeRow):' · melee/manual')+'</span></div>'+
+      (c.weapons.length?c.weapons.map(w=>{
+        const qBadge=(w.quality==='poor')?'<span style="color:var(--red);font-size:9px;font-weight:700;margin-left:3px;">POOR</span>'
+          :(w.quality==='excellent')?'<span style="color:var(--cyan);font-size:9px;font-weight:700;margin-left:3px;">EXC</span>':'';
+        const jamBadge=w.jammed?'<span style="color:var(--red);font-size:10px;font-weight:700;margin-left:4px;">🔧 JAMMED</span>':'';
+        const unjamBtn=w.jammed?'<button class="mini-btn" style="color:var(--amber);" onclick="unjamWeapon(\''+c.id+'\',\''+w.id+'\')">🔧 UNJAM</button>':'';
+        return '<div class="inv-row"><div class="inv-top"><div class="iw"><b>'+esc(w.name)+'</b>'+qBadge+jamBadge+'<span>'+w.dmg+(w.rangeRow?' · '+esc(w.rangeRow):' · melee/manual')+'</span></div>'+
         '<div class="iw-ammo">'+ammoLabel(w,c)+(w.reloading?'<br><span style="color:var(--amber);">⏳ '+(((w.reloadActions||1)-w.reloading)+1)+'/'+(w.reloadActions||1)+'</span>':'')+'</div>'+
+        unjamBtn+
         '<button class="mini-btn" onclick="'+(w.reloading?'cancelReload':'reloadWeapon')+'(\''+c.id+'\',\''+w.id+'\')"'+(w.mag==null?' disabled':'')+'>'+(w.reloading?'✕RLD':'RLD')+'</button>'+
         '<button class="mini-btn x" onclick="removeWeapon(\''+c.id+'\',\''+w.id+'\')">✕</button></div>'+
         (w.melee?'':'<div class="wbonus" style="margin-bottom:4px;"><div class="wb" style="flex:1;"><label>AMMO</label>'+
@@ -2727,7 +2907,7 @@ function cardHtml(c){ const pct=Math.max(0,Math.min(100,Math.round(c.hp/c.hpMax*
           '</select></div></div>')+
         '<div class="wbonus"><div class="wb"><label>+HIT</label><input type="number" inputmode="numeric" value="'+(w.hitBonus||0)+'" onchange="setWeaponBonus(\''+c.id+'\',\''+w.id+'\',\'hitBonus\',this.value)"></div>'+
           '<div class="wb"><label>+DMG</label><input type="number" inputmode="numeric" value="'+(w.dmgBonus||0)+'" onchange="setWeaponBonus(\''+c.id+'\',\''+w.id+'\',\'dmgBonus\',this.value)"></div></div>'+
-        '</div>').join('')
+        '</div>';}).join('')
         :'<div class="col-empty" style="padding:10px;">No weapons yet.</div>')+
       '<button class="add-wpn" onclick="openWeaponPicker(\''+c.id+'\')">+ ADD WEAPON</button></div>';
     const tracks='<div class="track-grid">'+
@@ -2744,7 +2924,10 @@ function cardHtml(c){ const pct=Math.max(0,Math.min(100,Math.round(c.hp/c.hpMax*
       '<div class="cond-add"><input id="condName_'+c.id+'" class="js-transient" placeholder="e.g. Prone, Stunned, Black Lace">'+
         '<input id="condRounds_'+c.id+'" class="js-transient" type="number" inputmode="numeric" placeholder="rds" title="rounds — blank = until removed">'+
         '<button onclick="addCondition(\''+c.id+'\')">ADD</button></div>'+
-      '<div class="cond-hint">Blank rounds = lasts until you clear it. Timed ones tick down at the end of this combatant\'s turn.</div></div>';
+      '<div class="cond-hint">Blank rounds = lasts until you clear it. Timed ones tick down at end of turn.</div>'+
+      '<div style="display:flex;gap:6px;margin-top:6px;">'+
+        '<button class="btn ghost sm" onclick="addManualCrit(\''+c.id+'\')">☠ ADD CRIT INJURY</button>'+
+        '<button class="btn ghost sm" onclick="renameCombatant(\''+c.id+'\')">✏ RENAME</button></div></div>';
     const manual='<div class="sl2">MANUAL DAMAGE / HEAL</div><div class="dmg-tool">'+
       '<input id="dmg_'+c.id+'" class="amt js-transient" type="number" inputmode="numeric" placeholder="amt">'+
       '<div class="mini-seg"><button id="loc_body_'+c.id+'" class="'+on(loc,'body')+'" onclick="setLoc(\''+c.id+'\',\'body\')">Body</button>'+
@@ -2871,6 +3054,13 @@ function cardHtml(c){ const pct=Math.max(0,Math.min(100,Math.round(c.hp/c.hpMax*
       ?'<button class="fe-btn" onclick="fieldExpertise(\''+c.id+'\')">⚒ FIELD EXPERTISE</button>'
       :down?'<div class="cover-static">'+(mortal?'☠ MORTALLY WOUNDED — CANNOT ACT':'☠ DOWN — CANNOT ACT')+'</div>'
       :'<button class="shoot-btn" onclick="openShoot(\''+c.id+'\')">⚔ ATTACK</button>')+
+      /* RAM button for drivers */
+      (function(){
+        if(c.isCover||down||!c.behindCoverId||c.seatRole!=='driver') return '';
+        const veh=find(c.behindCoverId);
+        if(!veh||!veh.isVehicle) return '';
+        return '<button class="shoot-btn" style="background:rgba(255,176,32,.15);color:var(--amber);border-color:rgba(255,176,32,.4);" onclick="openRam(\''+c.id+'\')">🚗 RAM</button>';
+      })()+
       /* NET arch shortcut for runners */
       (function(){
         if(c.isCover||down) return '';
@@ -3085,7 +3275,7 @@ let skRollTimer=null;
 /* ---- ROLE ABILITIES ---- */
 const CA_ABILITIES=[
   {id:'damageDeflection',name:'Damage Deflection',desc:'−dmg taken (first hit/round)',step:2,max:10,bonusLabel:v=>v?'−'+(v/2)+' dmg':'',bonusVal:v=>Math.floor(v/2)},
-  {id:'fumbleRecovery',name:'Fumble Recovery',desc:'ignore crit failures on attacks',step:4,max:4,bonusLabel:v=>v>=4?'ON':'',bonusVal:v=>v>=4?1:0},
+  {id:'fumbleRecovery',name:'Fumble Recovery',desc:'natural 1 does not explode downward',step:4,max:4,bonusLabel:v=>v>=4?'ON':'',bonusVal:v=>v>=4?1:0},
   {id:'initiativeReaction',name:'Initiative Reaction',desc:'+1 initiative per point',step:1,max:10,bonusLabel:v=>v?'+'+v+' init':'',bonusVal:v=>v},
   {id:'precisionAttack',name:'Precision Attack',desc:'+1 attack per 3 points',step:3,max:9,bonusLabel:v=>v?'+'+Math.floor(v/3)+' atk':'',bonusVal:v=>Math.floor(v/3)},
   {id:'spotWeakness',name:'Spot Weakness',desc:'+1 dmg (first hit/round) per point',step:1,max:10,bonusLabel:v=>v?'+'+v+' dmg':'',bonusVal:v=>v},
@@ -4415,7 +4605,7 @@ function blankChar(){
     skills:blankSkills(),
     hpMax:40, headSP:0, headSPMax:0, bodySP:0, bodySPMax:0,
     humanityMax:0, humanity:0, headArmor:null, bodyArmor:null,
-    humanityGained:0, humanityLost:0, ammo:[], tools:[], wardrobe:[], misc:[], archive:null,
+    humanityGained:0, humanityLost:0, traumaHL:0, ammo:[], tools:[], wardrobe:[], misc:[], archive:null,
     weapons:[], cyberware:'', gear:'', notes:'',
     cn:0, useCN:true, ncn:0, ncnAuto:true,
     canDodge:false, dodgeBase:0, trackDeath:true, body_stat:0,
@@ -4448,26 +4638,72 @@ function csShowPage(page,btn){
     if(idx>=0&&tabs[idx]) tabs[idx].classList.add('active');
   }
   const body=document.getElementById('csBody'); if(body&&btn) body.scrollTop=0;
+  if(page==='stats') csCyberUpdateHumanity();
 }
 
 /* ---- AMMUNITION TRACKER ---- */
 const AMMO_TYPES=['Basic','AP','API','Biotox','EMP','Expansive','Flash','Incendiary','Poison','Rubber','Sleep','Smart','Smoke','Teargas'];
 let csAmmo=[], csTools=[], csWardrobe=[], csMisc=[], csArchive=null, csImages=[];
+/* migrate legacy ammo entries: old `weapon` string → new `linkedWeapons` ID array */
+function migrateAmmoEntry(a,weapons){
+  if(Array.isArray(a.linkedWeapons)) return;
+  a.linkedWeapons=[];
+  if(!a.weapon) return;
+  const wn=(a.weapon||'').toLowerCase();
+  weapons.forEach(w=>{
+    const n=(w.name||'').toLowerCase();
+    if(n&&(wn.includes(n)||n.includes(wn.split(' ')[0]))) a.linkedWeapons.push(w.id);
+  });
+  delete a.weapon;
+}
 function csRenderAmmo(d){
   const list=Array.isArray(d.ammo)?d.ammo:[];
   csAmmo=JSON.parse(JSON.stringify(list));
+  const wpns=d.weapons||csWeapons||[];
+  csAmmo.forEach(a=>migrateAmmoEntry(a,wpns));
   if(!csAmmo.length) return '<div style="color:var(--muted);font-size:12px;font-family:var(--mono);">No ammo tracked.</div>';
   return csAmmo.map((a,i)=>ammoRowHtml(a,i)).join('');
 }
+function ammoLinkedLabel(a){
+  const ids=a.linkedWeapons||[];
+  if(!ids.length) return 'no weapon';
+  return ids.map(id=>{ const w=csWeapons.find(x=>x.id===id); return w?w.name:'?'; }).join(', ');
+}
 function ammoRowHtml(a,i){
   const typeOpts=AMMO_TYPES.map(t=>'<option'+(t===a.type?' selected':'')+'>'+t+'</option>').join('');
-  return '<div class="cs-wpn"><input style="width:90px;flex:0 0 auto;font-size:12px;padding:4px;" value="'+esc(a.weapon||'')+'" placeholder="weapon" onchange="csAmmo['+i+'].weapon=this.value;csPersistInv()">'+
+  const label=ammoLinkedLabel(a);
+  const linked=(a.linkedWeapons||[]).length;
+  return '<div class="cs-wpn"><button class="mini-btn edit-only" style="font-size:11px;padding:3px 6px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 0 auto;'+(linked?'':'color:var(--muted);')+'" onclick="csAmmoLinkPicker('+i+')">'+esc(label)+'</button>'+
+    '<span class="read-only" style="font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 0 auto;">'+esc(label)+'</span>'+
     '<input type="number" inputmode="numeric" style="width:50px;flex:0 0 auto;font-size:12px;padding:4px;text-align:center;" value="'+(a.qty!=null?a.qty:'')+'" placeholder="#" onchange="csAmmo['+i+'].qty=parseInt(this.value)||0;csPersistInv()">'+
     '<select style="width:80px;flex:0 0 auto;font-size:11px;padding:4px;" onchange="csAmmo['+i+'].type=this.value;csPersistInv()">'+typeOpts+'</select>'+
     '<input style="flex:1;min-width:40px;font-size:11px;padding:4px;" value="'+esc(a.notes||'')+'" placeholder="notes" onchange="csAmmo['+i+'].notes=this.value;csPersistInv()">'+
     '<button class="mini-btn edit-only" onclick="csAmmoRemove('+i+')">✕</button></div>';
 }
-function csAmmoAdd(){ csAmmo.push({weapon:'',qty:0,type:'Basic',notes:''}); csRefreshInvSection('csAmmoList',csAmmo.map((a,i)=>ammoRowHtml(a,i)).join('')); csPersistInv(); }
+function csAmmoLinkPicker(idx){
+  const a=csAmmo[idx]; if(!a) return;
+  const sel=new Set(a.linkedWeapons||[]);
+  const guns=csWeapons.filter(w=>w.mag!=null); /* only ranged weapons with magazines */
+  if(!guns.length){ toast('Add weapons first'); return; }
+  let html='<div style="max-height:50vh;overflow-y:auto;">';
+  guns.forEach(w=>{
+    const chk=sel.has(w.id)?'checked':'';
+    html+='<label style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--line);font-size:14px;cursor:pointer;">'+
+      '<input type="checkbox" data-wid="'+w.id+'" '+chk+' style="width:18px;height:18px;accent-color:var(--cyan);">'+
+      '<span>'+esc(w.name)+' <span style="color:var(--muted);font-size:11px;">'+esc(w.dmg)+'</span></span></label>';
+  });
+  html+='</div><button class="btn wide" style="margin-top:10px;" id="ammoLinkDone">DONE</button>';
+  showModal('Link Weapons → Ammo Pool',html);
+  document.getElementById('ammoLinkDone').onclick=function(){
+    const checks=document.querySelectorAll('#tempModal input[data-wid]');
+    a.linkedWeapons=[];
+    checks.forEach(cb=>{ if(cb.checked) a.linkedWeapons.push(cb.dataset.wid); });
+    document.getElementById('tempModal').classList.remove('open');
+    csRefreshInvSection('csAmmoList',csAmmo.map((aa,ii)=>ammoRowHtml(aa,ii)).join(''));
+    csPersistInv();
+  };
+}
+function csAmmoAdd(){ csAmmo.push({linkedWeapons:[],qty:0,type:'Basic',notes:''}); csRefreshInvSection('csAmmoList',csAmmo.map((a,i)=>ammoRowHtml(a,i)).join('')); csPersistInv(); }
 function csAmmoRemove(i){ csAmmo.splice(i,1); csRefreshInvSection('csAmmoList',csAmmo.length?csAmmo.map((a,ii)=>ammoRowHtml(a,ii)).join(''):'<div style="color:var(--muted);font-size:12px;font-family:var(--mono);">No ammo tracked.</div>'); csPersistInv(); }
 
 /* ---- SIMPLE LISTS (tools, misc) ---- */
@@ -4822,21 +5058,40 @@ function csCyberRefresh(){
 function csCyberUpdateHumanity(){
   const hl=csCyberHL();
   const hlEl=document.getElementById('csHumLost');
-  if(hlEl) hlEl.value=hl.total;
+  if(hlEl) hlEl.textContent=hl.total;
   const empEl=document.getElementById('cs_emp');
-  if(!empEl) return; /* stats page not rendered yet */
+  if(!empEl) return;
   const baseEmp=parseInt(empEl.value)||0;
+  const humMax=baseEmp*10;
   const hmEl=document.getElementById('csHumanityMax');
-  if(hmEl){
-    const newMax=Math.max(0,(baseEmp*10)-hl.maxPenalty);
-    hmEl.value=newMax;
-  }
+  if(hmEl) hmEl.textContent=humMax;
+  /* therapy ceiling: max − 2 per piece with HL>0 (4 per borgware) */
+  const ceiling=Math.max(0,humMax-hl.maxPenalty);
+  const ceilEl=document.getElementById('csTherapyCeil');
+  if(ceilEl) ceilEl.textContent=ceiling;
+  const traumaHL=parseInt((document.getElementById('csTraumaHL')||{}).value)||0;
   const gained=parseInt((document.getElementById('csHumGained')||{}).value)||0;
+  const raw=humMax-hl.total-traumaHL+gained;
+  const cur=Math.max(0,Math.min(ceiling,raw));
   const hcEl=document.getElementById('csHumanityCur');
-  if(hcEl && hmEl){
-    const max=parseInt(hmEl.value)||0;
-    const cur=Math.min(max, max - hl.total + gained);
-    hcEl.value=Math.max(0,cur);
+  if(hcEl) hcEl.textContent=cur;
+  const derivedEmp=Math.floor(cur/10);
+  const deEl=document.getElementById('csDerivedEmp');
+  if(deEl){ deEl.textContent=derivedEmp; deEl.style.color=derivedEmp<=2?'var(--red)':''; }
+  /* cyberpsychosis tracker */
+  const cpEl=document.getElementById('csCyberpsychosisTracker');
+  if(cpEl){
+    if(derivedEmp>=3) cpEl.innerHTML='';
+    else {
+      let status,desc,cls;
+      if(cur<0){ status='EXTREME CYBERPSYCHOSIS'; desc='Character is handed to the GM. Exhibits the worst tendencies from the Hare Psychopathy checklist. Hunted by C-SWAT. Returns to player only if Humanity becomes positive again.'; cls='cp-extreme'; }
+      else if(derivedEmp===0){ status='CYBERPSYCHOSIS'; desc='Character exhibits strongly at least 5 traits from the Hare Psychopathy checklist. Roleplay accordingly. C-SWAT may get involved.'; cls='cp-psycho'; }
+      else if(derivedEmp===1){ status='DISSOCIATIVE DISORDER'; desc='Borderline cyberpsychosis. Character exhibits strongly at least 3 traits from the Hare Psychopathy checklist: grandiose self, need for stimulation, cunning/manipulative, lack of remorse, callousness, poor behavioral controls, impulsivity.'; cls='cp-border'; }
+      else { status='BORDERLINE DISSOCIATIVE'; desc='Borderline dissociative disorder. Beginning to see self and others as collections of parts rather than people. Roleplay accordingly.'; cls='cp-warn'; }
+      cpEl.innerHTML='<div class="cp-tracker '+cls+'" style="margin-top:8px;padding:10px;border-radius:7px;font-family:var(--mono);font-size:12px;">'+
+        '<div style="font-weight:700;font-size:13px;margin-bottom:4px;">⚠ '+status+'</div>'+
+        '<div style="color:var(--dim);line-height:1.4;">'+desc+'</div></div>';
+    }
   }
 }
 
@@ -6361,13 +6616,17 @@ function openCharSheet(id,startReadOnly){
       '<div class="cs-section"><div class="cs-row">'+
         '<div class="field"><label class="sl">HP (MAX)</label><input id="csHP" type="number" inputmode="numeric" value="'+(d.hpMax||40)+'" placeholder="40"></div></div>'+
       '<div class="cs-row">'+
-        '<div class="field"><label class="sl">HUMANITY (MAX)</label><input id="csHumanityMax" type="number" inputmode="numeric" value="'+(d.humanityMax||(d.stats.emp?d.stats.emp*10:''))+'" placeholder="EMP×10"></div>'+
-        '<div class="field"><label class="sl">CURRENT HUMANITY</label><input id="csHumanityCur" type="number" inputmode="numeric" value="'+(d.humanity||(d.stats.emp?d.stats.emp*10:''))+'" placeholder="EMP×10"></div></div>'+
-      '<div class="hint" style="margin-top:-4px;margin-bottom:8px;">Humanity max = EMP × 10. Auto-sets when you change EMP.</div></div>'+
-      /* Therapy moved here */
-      '<div class="cs-section"><div class="sl2">THERAPY</div><div class="cs-row">'+
-        '<div class="field"><label class="sl">HUMANITY GAINED</label><input id="csHumGained" type="number" inputmode="numeric" value="'+(d.humanityGained||'')+'" placeholder="0"></div>'+
-        '<div class="field"><label class="sl">HUMANITY LOST</label><input id="csHumLost" type="number" inputmode="numeric" value="'+(d.humanityLost||'')+'" placeholder="0"></div></div></div>'+
+        '<div class="field"><label class="sl">HUMANITY MAX</label><div id="csHumanityMax" class="cs-derived">'+(d.humanityMax||(d.stats.emp?d.stats.emp*10:0))+'</div></div>'+
+        '<div class="field"><label class="sl">THERAPY CEILING</label><div id="csTherapyCeil" class="cs-derived" style="color:var(--amber);">—</div></div></div>'+
+      '<div class="cs-row">'+
+        '<div class="field"><label class="sl">CYBERWARE HL</label><div id="csHumLost" class="cs-derived" style="color:var(--red);">'+(d.humanityLost||0)+'</div></div>'+
+        '<div class="field"><label class="sl">TRAUMA HL</label><input id="csTraumaHL" type="number" inputmode="numeric" value="'+(d.traumaHL||'')+'" placeholder="0" onchange="csCyberUpdateHumanity()"></div></div>'+
+      '<div class="cs-row">'+
+        '<div class="field"><label class="sl">HUMANITY GAINED</label><input id="csHumGained" type="number" inputmode="numeric" value="'+(d.humanityGained||'')+'" placeholder="0" onchange="csCyberUpdateHumanity()"></div>'+
+        '<div class="field"><label class="sl">CURRENT HUMANITY</label><div id="csHumanityCur" class="cs-derived">'+(d.humanity||(d.stats.emp?d.stats.emp*10:0))+'</div></div></div>'+
+      '<div class="cs-row"><div class="field"><label class="sl">CURRENT EMP (DERIVED)</label><div id="csDerivedEmp" class="cs-derived">—</div></div></div>'+
+      '<div id="csCyberpsychosisTracker"></div>'+
+      '<div class="hint" style="margin-top:4px;margin-bottom:8px;">Max = EMP × 10. Ceiling = Max − 2/piece (4/borgware). Current = Max − Cyberware HL − Trauma HL + Gained, capped at Ceiling.</div></div>'+
       '<div class="cs-section" id="csSkillsSection"><div class="sl2">SKILLS</div>'+
         '<div id="csSkillsWrap">'+csRenderSkills(d)+'</div></div>'+
       '<details class="cs-section edit-only" style="margin-top:-8px;"><summary style="font-family:var(--mono);font-size:11px;color:var(--amber);cursor:pointer;letter-spacing:.5px;">⚔ COMBAT OPTIONS</summary>'+
@@ -6446,15 +6705,9 @@ function openCharSheet(id,startReadOnly){
     if(cb) cb.checked=rv>=8;
   });
 
-  /* auto-set humanity max from EMP stat */
+  /* auto-recalc humanity when EMP stat changes */
   const empEl=document.getElementById('cs_emp');
-  if(empEl) empEl.addEventListener('input',function(){
-    const ev=parseInt(this.value)||0;
-    const hm=document.getElementById('csHumanityMax');
-    const hc=document.getElementById('csHumanityCur');
-    if(hm) hm.value=ev*10;
-    if(hc&&(!hc.value||parseInt(hc.value)>(ev*10))) hc.value=ev*10;
-  });
+  if(empEl) empEl.addEventListener('input',function(){ csCyberUpdateHumanity(); });
 
   /* CN toggle hides/shows skills section AND CN fields */
   function syncSkillsVis(){
@@ -6532,9 +6785,17 @@ function csRemoveWeapon(i){ csWeapons.splice(i,1); refreshCSWeapons(); }
 function refreshCSWeapons(){
   const el=document.getElementById('csWpnList'); if(!el)return;
   if(!csWeapons.length){ el.innerHTML='<div style="color:var(--muted);font-size:12px;font-family:var(--mono);">No weapons yet.</div>'; return; }
-  el.innerHTML=csWeapons.map((w,i)=>
-    '<div class="cs-wpn"><div class="cw-info"><b>'+esc(w.name)+'</b><span>'+w.dmg+(w.rangeRow?' · '+esc(w.rangeRow):'')+'</span></div>'+
-    '<button class="mini-btn" onclick="csRemoveWeapon('+i+')">✕</button></div>').join('');
+  el.innerHTML=csWeapons.map((w,i)=>{
+    const q=w.quality||'standard';
+    const qBadge=q==='poor'?'<span style="color:var(--red);font-size:10px;font-weight:700;margin-left:4px;">POOR</span>'
+      :q==='excellent'?'<span style="color:var(--cyan);font-size:10px;font-weight:700;margin-left:4px;">EXCELLENT</span>':'';
+    const attN=(w.attachments||[]).length;
+    const attBadge=attN?'<span style="color:var(--muted);font-size:10px;margin-left:4px;">'+attN+' att</span>':'';
+    return '<div class="cs-wpn"><div class="cw-info"><b>'+esc(w.name)+'</b>'+qBadge+attBadge+
+      '<span>'+w.dmg+(w.mag!=null?' · mag '+w.mag:'')+(w.rangeRow?' · '+esc(w.rangeRow):' · melee')+'</span></div>'+
+      '<button class="mini-btn edit-only" onclick="csEditWeapon('+i+')" title="Edit">✎</button>'+
+      '<button class="mini-btn edit-only" onclick="csRemoveWeapon('+i+')">✕</button></div>';
+  }).join('');
 }
 /* reuse existing weapon picker for character sheet */
 function csAddWeaponPicker(){
@@ -6569,6 +6830,9 @@ function csAddWeaponPicker(){
       '<option value="Sniper Rifle">Sniper Rifle</option><option value="Bows & Crossbow">Bow / Crossbow</option>'+
       '<option value="Grenade Launcher">Grenade Launcher</option><option value="Rocket Launcher">Rocket Launcher</option>'+
     '</select></div></div>'+
+  '<div class="row"><div class="field"><label class="sl">AREA MODE</label><select id="csCwArea">'+
+      '<option value="">None</option><option value="shell">Shell (3d6 3×3)</option><option value="blast">Blast (10m)</option></select></div>'+
+    '<div class="field"><label class="sl"><input type="checkbox" id="csCwAP"> AP AMMO DEFAULT</label></div></div>'+
   '<button class="btn cyan wide" onclick="csPickCustomWeapon()">ADD CUSTOM</button></div>';
   document.getElementById('customBox').style.display='none';
   const wm=document.getElementById('weaponModal'); wm.classList.add('open','z-top');
@@ -6594,13 +6858,142 @@ function csPickCustomWeapon(){
   const autoV=document.getElementById('csCwAutoMult').value; const autoMult=autoV===''?null:parseInt(autoV)||null;
   const reloadActions=parseInt(document.getElementById('csCwReload').value)||1;
   const wpnSkill=document.getElementById('csCwSkill').value||'Custom';
-  const w={id:uid(),name,skill:wpnSkill,dmg,mag,ammo:mag,rangeRow:rr,rof:rof,hitBonus:hb,dmgBonus:db,
+  const areaMode=document.getElementById('csCwArea').value||null;
+  const apDefault=document.getElementById('csCwAP').checked;
+  const w={id:uid(),name,skill:wpnSkill,dmg,mag,baseMag:mag,ammo:mag,rangeRow:rr,rof:rof,hitBonus:hb,dmgBonus:db,
     armorMode:ignoreBelow?'ignore':(rr?'full':'half'),
     melee:!rr&&mag==null,ignoreBelow:ignoreBelow,autoMult:autoMult,
-    autoRow:autoMult?rr:null,areaMode:null,
-    ammoType:'basic',apDefault:false,reloadActions:reloadActions,reloading:0};
+    autoRow:autoMult?rr:null,areaMode:areaMode,
+    ammoType:apDefault?'ap':'basic',apDefault:apDefault,reloadActions:reloadActions,reloading:0,
+    quality:'standard',attachments:[],jammed:false};
   csWeapons.push(w);
   refreshCSWeapons(); csCloseWeaponPicker();
+}
+
+/* ---- WEAPON EDIT MODAL (character sheet) ---- */
+function csEditWeapon(i){
+  const w=csWeapons[i]; if(!w) return;
+  const skillOpts=['Handgun','Shoulder Arms','Heavy Weapons','Archery','Melee Weapon','Brawling','Martial Arts','Custom']
+    .map(s=>'<option'+(s===(w.skill||'Custom')?' selected':'')+'>'+s+'</option>').join('');
+  const rangeOpts=[['','Melee / manual DV'],['Pistol','Pistol'],['SMG','SMG'],['Shotgun (Slug)','Shotgun'],
+    ['Assault Rifle','Assault Rifle'],['Sniper Rifle','Sniper Rifle'],['Bows & Crossbow','Bow / Crossbow'],
+    ['Grenade Launcher','Grenade Launcher'],['Rocket Launcher','Rocket Launcher']]
+    .map(r=>'<option value="'+r[0]+'"'+(r[0]===(w.rangeRow||'')?' selected':'')+'>'+r[1]+'</option>').join('');
+  const areaOpts=[['','None'],['shell','Shell (3d6 3×3)'],['blast','Blast (10m)']]
+    .map(r=>'<option value="'+r[0]+'"'+(r[0]===(w.areaMode||'')?' selected':'')+'>'+r[1]+'</option>').join('');
+  const qualOpts=['poor','standard','excellent']
+    .map(q=>'<option value="'+q+'"'+(q===(w.quality||'standard')?' selected':'')+'>'+q.charAt(0).toUpperCase()+q.slice(1)+'</option>').join('');
+  const clipOpts=['',  ...Object.keys(CLIP_CHART)]
+    .map(c=>'<option value="'+c+'"'+(c===(clipTypeOf(w)||'')?' selected':'')+'>'+(c||'Auto / None')+'</option>').join('');
+  let html='<div style="max-height:70vh;overflow-y:auto;">'+
+    '<div class="row"><div class="field" style="flex:2;"><label class="sl">NAME</label><input id="weN" value="'+esc(w.name)+'"></div>'+
+      '<div class="field"><label class="sl">DAMAGE</label><input id="weDmg" value="'+esc(w.dmg)+'"></div></div>'+
+    '<div class="row"><div class="field"><label class="sl">MAG</label><input id="weMag" type="number" inputmode="numeric" value="'+(w.baseMag!=null?w.baseMag:(w.mag!=null?w.mag:''))+'"></div>'+
+      '<div class="field"><label class="sl">ROF</label><input id="weRof" type="number" inputmode="numeric" value="'+(w.rof||1)+'"></div>'+
+      '<div class="field"><label class="sl">RELOAD</label><input id="weReload" type="number" inputmode="numeric" value="'+(w.reloadActions||1)+'"></div></div>'+
+    '<div class="row"><div class="field"><label class="sl">+HIT</label><input id="weHit" type="number" inputmode="numeric" value="'+(w.hitBonus||0)+'"></div>'+
+      '<div class="field"><label class="sl">+DMG</label><input id="weDmgB" type="number" inputmode="numeric" value="'+(w.dmgBonus||0)+'"></div>'+
+      '<div class="field"><label class="sl">IGNORE ≤</label><input id="weIgn" type="number" inputmode="numeric" value="'+(w.ignoreBelow||'')+'"></div></div>'+
+    '<div class="row"><div class="field"><label class="sl">AUTOFIRE ×</label><input id="weAuto" type="number" inputmode="numeric" value="'+(w.autoMult||'')+'"></div>'+
+      '<div class="field"><label class="sl">SKILL</label><select id="weSkill">'+skillOpts+'</select></div></div>'+
+    '<div class="row"><div class="field"><label class="sl">RANGE PROFILE</label><select id="weRange">'+rangeOpts+'</select></div></div>'+
+    '<div class="row"><div class="field"><label class="sl">AREA MODE</label><select id="weArea">'+areaOpts+'</select></div>'+
+      '<div class="field"><label class="sl"><input type="checkbox" id="weAP"'+(w.apDefault?' checked':'')+'> AP DEFAULT</label></div></div>'+
+    '<div class="row"><div class="field"><label class="sl">QUALITY</label><select id="weQual">'+qualOpts+'</select></div>'+
+      '<div class="field"><label class="sl">CLIP TYPE</label><select id="weClip">'+clipOpts+'</select></div></div>'+
+    csAttachEditHtml(w,i)+
+    '</div><button class="btn cyan wide" style="margin-top:10px;" id="weSaveBtn">SAVE CHANGES</button>';
+  showModal('Edit: '+w.name,html);
+  document.getElementById('weSaveBtn').onclick=function(){ csWeaponSaveEdit(i); };
+}
+function csAttachEditHtml(w,idx){
+  const used=attachUsedSlots(w); const atts=w.attachments||[];
+  let html='<div class="sl2" style="margin-top:10px;">ATTACHMENTS ('+used+'/3 slots)</div>';
+  atts.forEach((a,ai)=>{
+    html+='<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--line);">'+
+      '<span style="flex:1;font-size:13px;">'+esc(a.name)+' <span style="color:var(--muted);font-size:11px;">('+a.slots+' slot'+(a.slots>1?'s':'')+')</span></span>'+
+      '<button class="mini-btn" onclick="csAttachRemove('+idx+','+ai+')">✕</button></div>';
+  });
+  html+='<button class="btn ghost sm" style="margin-top:6px;" onclick="csAttachPicker('+idx+')">+ ADD ATTACHMENT</button>';
+  return html;
+}
+function csAttachPicker(wi){
+  const w=csWeapons[wi]; if(!w) return;
+  const used=attachUsedSlots(w);
+  const isShoulder=(w.skill==='Shoulder Arms');
+  const isBow=(w.rangeRow==='Bows & Crossbow');
+  const isRanged=!w.melee;
+  const hasClip=hasAttach(w,'extended')||hasAttach(w,'drum');
+  let html='<div style="max-height:50vh;overflow-y:auto;">';
+  ATTACH_CAT.forEach((a,ai)=>{
+    const elig=(a.eligible==='all')||(a.eligible==='shoulder'&&isShoulder)||(a.eligible==='ranged-noBow'&&isRanged&&!isBow);
+    const dupClip=(a.effect==='extended'||a.effect==='drum')&&hasClip;
+    const hasDup=(w.attachments||[]).some(x=>x.effect===a.effect);
+    const fits=used+a.slots<=3;
+    const ok=elig&&!dupClip&&!hasDup&&fits;
+    html+='<button style="display:flex;align-items:center;gap:8px;padding:10px 8px;border-bottom:1px solid var(--line);width:100%;text-align:left;background:none;border-left:none;border-right:none;border-top:none;color:'+(ok?'var(--text)':'var(--muted)')+';font-size:13px;cursor:'+(ok?'pointer':'default')+';"'+
+      (ok?' onclick="csAttachAdd('+wi+','+ai+')"':' disabled')+'>'+
+      '<span style="flex:1;">'+esc(a.name)+'</span>'+
+      '<span style="font-size:11px;color:var(--muted);">'+a.slots+' slot'+(a.slots>1?'s':'')+'</span></button>';
+  });
+  /* custom attachment */
+  html+='<div style="padding:10px 4px 4px;border-top:2px solid var(--line);"><div class="sl2">CUSTOM ATTACHMENT</div>'+
+    '<div class="row"><div class="field" style="flex:2;"><label class="sl">NAME</label><input id="caName" placeholder="Laser Sight"></div>'+
+    '<div class="field"><label class="sl">SLOTS</label><select id="caSlots"><option>1</option><option>2</option></select></div></div>'+
+    '<button class="btn ghost sm" onclick="csAttachAddCustom('+wi+')">ADD CUSTOM</button></div>';
+  html+='</div>';
+  showModal('Add Attachment ('+used+'/3 used)',html);
+}
+function csAttachAdd(wi,ai){
+  const w=csWeapons[wi]; const a=ATTACH_CAT[ai];
+  if(!w||!a) return;
+  if(!w.attachments) w.attachments=[];
+  w.attachments.push({name:a.name,slots:a.slots,effect:a.effect});
+  if(a.effect==='extended'||a.effect==='drum') applyClipAttach(w);
+  document.getElementById('tempModal').classList.remove('open');
+  refreshCSWeapons();
+}
+function csAttachAddCustom(wi){
+  const w=csWeapons[wi]; if(!w) return;
+  const name=(document.getElementById('caName').value||'').trim(); if(!name){ toast('Enter a name'); return; }
+  const slots=parseInt(document.getElementById('caSlots').value)||1;
+  if(attachUsedSlots(w)+slots>3){ toast('Not enough slots'); return; }
+  if(!w.attachments) w.attachments=[];
+  w.attachments.push({name:name,slots:slots,effect:'custom'});
+  document.getElementById('tempModal').classList.remove('open');
+  refreshCSWeapons();
+}
+function csAttachRemove(wi,ai){
+  const w=csWeapons[wi]; if(!w||!w.attachments) return;
+  const removed=w.attachments.splice(ai,1)[0];
+  if(removed&&(removed.effect==='extended'||removed.effect==='drum')) applyClipAttach(w);
+  refreshCSWeapons();
+}
+function csWeaponSaveEdit(i){
+  const w=csWeapons[i]; if(!w) return;
+  w.name=(document.getElementById('weN').value||'').trim()||'Weapon';
+  w.dmg=(document.getElementById('weDmg').value||'').trim()||'1d6';
+  const magV=document.getElementById('weMag').value; w.baseMag=magV===''?null:parseInt(magV)||null;
+  w.mag=w.baseMag; w.ammo=w.mag;
+  w.rof=parseInt(document.getElementById('weRof').value)||1;
+  w.reloadActions=parseInt(document.getElementById('weReload').value)||1;
+  w.hitBonus=parseInt(document.getElementById('weHit').value)||0;
+  w.dmgBonus=parseInt(document.getElementById('weDmgB').value)||0;
+  const ignV=document.getElementById('weIgn').value; w.ignoreBelow=ignV===''?null:parseInt(ignV)||null;
+  const autoV=document.getElementById('weAuto').value; w.autoMult=autoV===''?null:parseInt(autoV)||null;
+  w.skill=document.getElementById('weSkill').value||'Custom';
+  w.rangeRow=document.getElementById('weRange').value||null;
+  w.autoRow=w.autoMult?w.rangeRow:null;
+  w.areaMode=document.getElementById('weArea').value||null;
+  w.apDefault=document.getElementById('weAP').checked;
+  w.armorMode=w.ignoreBelow?'ignore':(w.rangeRow?'full':'half');
+  w.melee=!w.rangeRow&&w.mag==null;
+  w.quality=document.getElementById('weQual').value||'standard';
+  w.clipType=document.getElementById('weClip').value||null;
+  /* reapply clip attachment if any */
+  applyClipAttach(w);
+  document.getElementById('tempModal').classList.remove('open');
+  refreshCSWeapons();
 }
 
 /* ---- Skill rendering for character sheet ---- */
@@ -6759,10 +7152,11 @@ function saveCharSheet(silent){
   const canDodge=document.getElementById('csDodge').checked;
   const cyberware=''; /* legacy field — cyberware now stored in cyberwareData */
   const gear=(document.getElementById('csGear').value||'').trim();
-  const humanityMax=parseInt(document.getElementById('csHumanityMax').value)||(stats.emp*10)||0;
-  const humanity=parseInt(document.getElementById('csHumanityCur').value)||humanityMax;
-  const humanityGained=parseInt(document.getElementById('csHumGained').value)||0;
-  const humanityLost=parseInt(document.getElementById('csHumLost').value)||0;
+  const humanityMax=parseInt((document.getElementById('csHumanityMax')||{}).textContent)||(stats.emp*10)||0;
+  const humanity=parseInt((document.getElementById('csHumanityCur')||{}).textContent)||humanityMax;
+  const humanityGained=parseInt((document.getElementById('csHumGained')||{}).value)||0;
+  const humanityLost=parseInt((document.getElementById('csHumLost')||{}).textContent)||0;
+  const traumaHL=parseInt((document.getElementById('csTraumaHL')||{}).value)||0;
   /* inventory + archive from in-memory state */
   const ammo=JSON.parse(JSON.stringify(csAmmo));
   const tools=JSON.parse(JSON.stringify(csTools));
@@ -6816,13 +7210,13 @@ function saveCharSheet(silent){
   if(csEditId){
     const c=rosterFind(csEditId);
     if(c){ Object.assign(c,{name,handle,role,roles,stats,skills,skillMisc,hpMax,headSPMax:headSP,headSP:headSP,bodySPMax:bodySP,bodySP:bodySP,
-      humanityMax,humanity,humanityGained,humanityLost,ip,eurodollars,injuries:csInjuries.slice(),combatAwareness,headArmor,bodyArmor,ammo,tools,wardrobe,misc,archive,
+      humanityMax,humanity,humanityGained,humanityLost,traumaHL,ip,eurodollars,injuries:csInjuries.slice(),combatAwareness,headArmor,bodyArmor,ammo,tools,wardrobe,misc,archive,
       useCN,cn,ncn,ncnAuto:false,canDodge,dodgeBase:cn,cyberware,gear,side,weapons:csWeapons.map(w=>Object.assign({},w)),
       images,body_stat:stats.body||5,cyberwareData},bio); }
   } else {
     roster.push(Object.assign(blankChar(),{name,handle,role,roles,stats,skills,skillMisc,hpMax,
       headSP:headSP,headSPMax:headSP,bodySP:bodySP,bodySPMax:bodySP,
-      humanityMax,humanity,humanityGained,humanityLost,ip,eurodollars,injuries:csInjuries.slice(),combatAwareness,headArmor,bodyArmor,ammo,tools,wardrobe,misc,archive,
+      humanityMax,humanity,humanityGained,humanityLost,traumaHL,ip,eurodollars,injuries:csInjuries.slice(),combatAwareness,headArmor,bodyArmor,ammo,tools,wardrobe,misc,archive,
       useCN,cn,ncn,ncnAuto:false,canDodge,dodgeBase:cn,cyberware,gear,side,
       weapons:csWeapons.map(w=>Object.assign({},w)),images,body_stat:stats.body||5,cyberwareData},bio));
   }
@@ -6893,7 +7287,7 @@ function addRosterToCombat(id,overrideSide){
     head:hasState?(c.headSP!=null?c.headSP:c.headSPMax):c.headSPMax,
     body:hasState?(c.bodySP!=null?c.bodySP:c.bodySPMax):c.bodySPMax,
     headMax:c.headSPMax, bodyMax:c.bodySPMax,
-    init:0, weapons:c.weapons.map(w=>{const copy=Object.assign({},w); copy.id=uid();
+    init:0, weapons:c.weapons.map(w=>{const copy=Object.assign({},w); copy.rosterWpnId=w.id; copy.id=uid();
       if(copy.mag!=null&&!hasState) copy.ammo=copy.mag; /* only reset ammo if fresh */
       return copy;}),
     injuries:(c.injuries||[]).slice(), conditions:(c.conditions||[]).map(co=>Object.assign({},co)),
@@ -6907,7 +7301,8 @@ function addRosterToCombat(id,overrideSide){
     charStats:JSON.parse(JSON.stringify(c.stats||{})),
     skills:c.skills?JSON.parse(JSON.stringify(c.skills)):null,
     skillMisc:c.skillMisc?JSON.parse(JSON.stringify(c.skillMisc)):null,
-    ammoReserve:Array.isArray(c.ammo)?JSON.parse(JSON.stringify(c.ammo)):null,
+    ammoReserve:(function(){ const ar=Array.isArray(c.ammo)?JSON.parse(JSON.stringify(c.ammo)):null;
+      if(ar) ar.forEach(a=>migrateAmmoEntry(a,c.weapons||[])); return ar; })(),
     combatAwareness:(function(){
       migrateRoles(c);
       const sr=c.roles?c.roles.find(r=>r.role==='Solo'):null;
