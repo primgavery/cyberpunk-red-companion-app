@@ -585,6 +585,22 @@
   .cp-tracker.cp-border{background:rgba(255,80,40,.12);border:1px solid rgba(255,80,40,.4);color:var(--red);}
   .cp-tracker.cp-psycho{background:rgba(255,30,30,.15);border:1px solid rgba(255,30,30,.5);color:#ff4444;}
   .cp-tracker.cp-extreme{background:rgba(255,0,0,.2);border:2px solid #ff2222;color:#ff2222;}
+
+  /* ---------- VTT GRID ---------- */
+  .grid-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg);
+    z-index:55;display:none;flex-direction:column;}
+  .grid-overlay.open{display:flex;}
+  .grid-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;
+    background:var(--panel);border-bottom:1px solid var(--line);flex:0 0 auto;}
+  .grid-title{font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:.5px;}
+  .grid-tools{display:flex;gap:6px;}
+  .grid-btn{background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:6px;
+    font-size:16px;width:36px;height:36px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .grid-btn:active{border-color:var(--cyan);transform:scale(.92);}
+  .grid-btn.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,229,255,.1);}
+  .grid-ftr{padding:6px 12px;background:var(--panel);border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;flex:0 0 auto;}
+  #gridCanvas{flex:1;width:100%;touch-action:none;cursor:grab;}
   .cs-wpn{display:flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--line);
     border-radius:7px;padding:7px 9px;margin-bottom:5px;font-size:13px;}
   .cs-wpn .cw-info{flex:1;min-width:0;}
@@ -835,6 +851,7 @@
       <button class="btn ghost" onclick="openRosterPick()">◉ ROSTER</button>
       <button class="btn ghost" onclick="openLibrary()">☰ NPCs</button>
       <button class="btn ghost" onclick="toggleSort()"><span id="sortLabel">SORT: ADDED</span></button>
+      <button class="btn ghost" onclick="openGrid()">🗺</button>
       <button class="btn ghost more" id="tbMoreBtn" aria-haspopup="menu" aria-expanded="false"
         aria-label="More actions" onclick="toggleToolMenu(event)">⋯</button>
       <div class="tb-menu" id="tbMenu" role="menu">
@@ -1670,21 +1687,37 @@ function removeCondition(id,idx){ const c=find(id); if(!c)return; if(!Array.isAr
 /* rename combatant on the fly */
 function renameCombatant(id){
   const c=find(id); if(!c) return;
-  const newName=prompt('Rename '+c.name+':',c.name);
-  if(!newName||!newName.trim()) return;
-  c.name=newName.trim(); save(); renderCombat();
-  toast('Renamed to '+c.name);
+  showModal('Rename '+esc(c.name),
+    '<input id="renameInput" value="'+esc(c.name)+'" style="width:100%;font-size:16px;padding:8px;margin-bottom:10px;">'+
+    '<button class="btn cyan wide" id="renameDone">RENAME</button>');
+  const inp=document.getElementById('renameInput');
+  if(inp){ inp.focus(); inp.select(); }
+  document.getElementById('renameDone').onclick=function(){
+    const v=(document.getElementById('renameInput').value||'').trim();
+    if(!v) return;
+    c.name=v; save(); renderCombat();
+    document.getElementById('tempModal').classList.remove('open');
+    toast('Renamed to '+c.name);
+  };
 }
 /* manual crit injury */
 function addManualCrit(id){
   const c=find(id); if(!c) return;
-  const inj=prompt('Crit injury for '+c.name+':','');
-  if(!inj||!inj.trim()) return;
-  if(!Array.isArray(c.injuries)) c.injuries=[];
-  c.injuries.push(inj.trim());
-  logEvent('• '+c.name+' suffers '+inj.trim(),'crit');
-  save(); renderCombat();
-  toast(c.name+' → '+inj.trim());
+  showModal('Crit Injury: '+esc(c.name),
+    '<input id="critInput" placeholder="e.g. Broken Arm" style="width:100%;font-size:16px;padding:8px;margin-bottom:10px;">'+
+    '<button class="btn cyan wide" id="critDone">ADD INJURY</button>');
+  const inp=document.getElementById('critInput');
+  if(inp) inp.focus();
+  document.getElementById('critDone').onclick=function(){
+    const inj=(document.getElementById('critInput').value||'').trim();
+    if(!inj) return;
+    if(!Array.isArray(c.injuries)) c.injuries=[];
+    c.injuries.push(inj);
+    logEvent('• '+c.name+' suffers '+inj,'crit');
+    save(); renderCombat();
+    document.getElementById('tempModal').classList.remove('open');
+    toast(c.name+' → '+inj);
+  };
 }
 function dupCombatant(id){ const c=find(id); if(!c) return; const copy=JSON.parse(JSON.stringify(c)); copy.id=uid();
   copy.weapons.forEach(w=>w.id=uid()); const baseName=c.name.replace(/\s#\d+$/,'');
@@ -2287,6 +2320,14 @@ function selectTarget(id){
   else { aimBtns.forEach(bid=>{const b=document.getElementById(bid); if(b){b.disabled=false;b.style.opacity='';b.style.display='';}});
     if(vehBtn){vehBtn.style.display='none';} }
   applyRangeVisibility(); renderBands(); updateShootDV(); shoot.defence='dv'; renderDefence();
+  /* auto-fill range from grid positions if both tokens are placed */
+  const shooter=find(shoot.shooterId);
+  if(t&&shooter&&shooter.gridX!=null&&t.gridX!=null){
+    const dx=Math.abs(shooter.gridX-t.gridX), dy=Math.abs(shooter.gridY-t.gridY);
+    const dist=Math.round(Math.sqrt(dx*dx+dy*dy)*2); /* 2m per cell */
+    const inp=document.getElementById('shootRange');
+    if(inp){ inp.value=dist; shoot.range=String(dist); updateShootDV(); }
+  }
   const btn=document.getElementById('rollAtkBtn');
   if(btn && shoot.fireMode==='single') btn.textContent=autoHits(currentWeapon(),t)?'⚔ STRIKE (auto-hit)':'⚅ ROLL ATTACK'; }
 function onWeaponChange(){ shoot.wi=parseInt(document.getElementById('shootWeapon').value)||0; const w=currentWeapon();
@@ -7581,10 +7622,464 @@ function viewCombatSheet(combatId){
   document.getElementById('charSheetModal').classList.add('open');
 }
 
+/* ==================== VTT BATTLE MAP ==================== */
+const G={cols:20,rows:20,cell:40,ox:0,oy:0,zoom:1,sel:null,
+  drag:null,dragSX:0,dragSY:0,dragMoved:false,
+  panSX:0,panSY:0,panning:false,
+  measure:false,mFrom:null,mTo:null,
+  pointers:new Map(),pinchD0:0};
+
+function openGrid(){
+  const ov=document.getElementById('gridOverlay');
+  ov.classList.add('open');
+  /* must size canvas AFTER overlay is visible so offsetWidth/Height are non-zero */
+  requestAnimationFrame(()=>{
+    const cv=document.getElementById('gridCanvas');
+    const dpr=window.devicePixelRatio||1;
+    const w=cv.offsetWidth, h=cv.offsetHeight;
+    cv.width=w*dpr; cv.height=h*dpr;
+    cv.getContext('2d').scale(dpr,dpr);
+    gridAutoPlace();
+    gridResetView();
+    gridBindEvents(cv);
+  });
+}
+function closeGrid(){ document.getElementById('gridOverlay').classList.remove('open'); }
+
+function gridResetView(){
+  const cv=document.getElementById('gridCanvas');
+  const w=cv.offsetWidth, h=cv.offsetHeight;
+  const totalW=G.cols*G.cell, totalH=G.rows*G.cell;
+  G.zoom=Math.min(w/(totalW+40), h/(totalH+40));
+  G.ox=(w-(totalW*G.zoom))/2;
+  G.oy=(h-(totalH*G.zoom))/2;
+  gridDraw();
+}
+
+function gridResize(){
+  showModal('Grid Size',
+    '<input id="gridSizeInput" value="'+G.cols+'×'+G.rows+'" placeholder="20×20" style="width:100%;font-size:16px;padding:8px;margin-bottom:10px;">'+
+    '<div class="hint" style="margin-bottom:10px;">Format: cols×rows (max 60×60)</div>'+
+    '<button class="btn cyan wide" id="gridSizeDone">SET SIZE</button>');
+  const inp=document.getElementById('gridSizeInput');
+  if(inp){ inp.focus(); inp.select(); }
+  document.getElementById('gridSizeDone').onclick=function(){
+    const v=(document.getElementById('gridSizeInput').value||'');
+    const p=v.split(/[×xX,]/);
+    G.cols=Math.max(5,Math.min(60,parseInt(p[0])||20));
+    G.rows=Math.max(5,Math.min(60,parseInt(p[1])||G.cols));
+    document.getElementById('tempModal').classList.remove('open');
+    gridResetView();
+  };
+}
+
+function gridAutoPlace(){
+  const taken=new Set();
+  combatants.forEach(c=>{
+    if(c.gridX!=null&&c.gridY!=null) taken.add(c.gridX+','+c.gridY);
+  });
+  combatants.forEach(c=>{
+    if(c.gridX!=null&&c.gridY!=null) return;
+    const sc=c.side==='enemy'?G.cols-3:2;
+    const dir=c.side==='enemy'?-1:1;
+    for(let r=1;r<G.rows-1;r++){
+      for(let col=sc;col>=0&&col<G.cols;col+=dir){
+        const k=col+','+r;
+        if(!taken.has(k)){ c.gridX=col; c.gridY=r; taken.add(k); return; }
+      }
+    }
+  });
+}
+
+function gridTokenAt(gx,gy){
+  return combatants.find(c=>c.gridX===gx&&c.gridY===gy);
+}
+function gridScreenToCell(sx,sy){
+  const c=G.cell*G.zoom;
+  return {x:Math.floor((sx-G.ox)/c), y:Math.floor((sy-G.oy)/c)};
+}
+function gridCellCenter(gx,gy){
+  const c=G.cell*G.zoom;
+  return {x:G.ox+(gx+0.5)*c, y:G.oy+(gy+0.5)*c};
+}
+function gridDist(a,b){
+  const dx=Math.abs(a.gridX-b.gridX), dy=Math.abs(a.gridY-b.gridY);
+  return Math.round(Math.sqrt(dx*dx+dy*dy)*2); /* 2m per cell */
+}
+
+function gridDraw(){
+  const cv=document.getElementById('gridCanvas');
+  if(!cv) return;
+  const ctx=cv.getContext('2d');
+  const w=cv.offsetWidth, h=cv.offsetHeight;
+  const c=G.cell*G.zoom;
+  ctx.clearRect(0,0,w,h);
+
+  /* grid lines */
+  ctx.strokeStyle='rgba(255,255,255,.07)';
+  ctx.lineWidth=1;
+  for(let i=0;i<=G.cols;i++){
+    const x=G.ox+i*c;
+    if(x>=0&&x<=w){ctx.beginPath();ctx.moveTo(x,Math.max(0,G.oy));ctx.lineTo(x,Math.min(h,G.oy+G.rows*c));ctx.stroke();}
+  }
+  for(let i=0;i<=G.rows;i++){
+    const y=G.oy+i*c;
+    if(y>=0&&y<=h){ctx.beginPath();ctx.moveTo(Math.max(0,G.ox),y);ctx.lineTo(Math.min(w,G.ox+G.cols*c),y);ctx.stroke();}
+  }
+
+  /* boundary */
+  ctx.strokeStyle='rgba(255,255,255,.2)';
+  ctx.lineWidth=2;
+  ctx.strokeRect(G.ox,G.oy,G.cols*c,G.rows*c);
+
+  /* side labels */
+  ctx.fillStyle='rgba(0,229,255,.15)';
+  ctx.font='bold '+Math.max(10,c*0.5)+'px sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('ALLIES',G.ox+c*2,G.oy-Math.max(8,c*0.3));
+  ctx.fillStyle='rgba(255,60,60,.15)';
+  ctx.fillText('ENEMIES',G.ox+(G.cols-2)*c,G.oy-Math.max(8,c*0.3));
+
+  /* active turn id */
+  const turnId=activeId||null;
+
+  /* tokens */
+  combatants.forEach(t=>{
+    if(t.gridX==null||t.gridY==null) return;
+    const pos=gridCellCenter(t.gridX,t.gridY);
+    const cx=pos.x, cy=pos.y;
+    const r=c*0.38;
+
+    /* cover objects */
+    if(t.isCover){
+      const sx=G.ox+t.gridX*c+2, sy=G.oy+t.gridY*c+2;
+      const isVeh=t.isVehicle;
+      ctx.fillStyle=isVeh?'rgba(80,80,120,.5)':'rgba(100,100,100,.4)';
+      ctx.fillRect(sx,sy,c-4,(isVeh?c*2:c)-4);
+      ctx.strokeStyle=isVeh?'rgba(120,120,180,.6)':'rgba(150,150,150,.4)';
+      ctx.lineWidth=1;
+      ctx.strokeRect(sx,sy,c-4,(isVeh?c*2:c)-4);
+      ctx.fillStyle='#aaa';
+      ctx.font=Math.max(8,c*0.22)+'px sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      const label=t.name.length>6?t.name.slice(0,5)+'…':t.name;
+      ctx.fillText(label,cx,cy);
+      /* HP text for cover */
+      if(t.hpMax>0){
+        ctx.font=Math.max(7,c*0.18)+'px sans-serif';
+        ctx.fillStyle='#888';
+        ctx.fillText(t.hp+'/'+t.hpMax,cx,cy+c*0.28);
+      }
+      return;
+    }
+
+    const isAlly=t.side!=='enemy';
+    const dead=t.hp<=0;
+
+    /* active turn glow */
+    if(t.id===turnId&&!dead){
+      ctx.beginPath(); ctx.arc(cx,cy,r+6,0,Math.PI*2);
+      ctx.fillStyle=isAlly?'rgba(0,229,255,.12)':'rgba(255,60,60,.12)';
+      ctx.fill();
+      ctx.strokeStyle=isAlly?'rgba(0,229,255,.6)':'rgba(255,60,60,.6)';
+      ctx.lineWidth=2; ctx.stroke();
+    }
+
+    /* selection ring */
+    if(t.id===G.sel){
+      ctx.beginPath(); ctx.arc(cx,cy,r+3,0,Math.PI*2);
+      ctx.strokeStyle='#fff'; ctx.lineWidth=2.5; ctx.stroke();
+    }
+
+    /* token body */
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+    ctx.fillStyle=dead?'#2a2a2a':(isAlly?'rgba(0,180,230,.85)':'rgba(220,50,50,.85)');
+    ctx.fill();
+    ctx.strokeStyle=dead?'#444':(isAlly?'#00e5ff':'#ff4444');
+    ctx.lineWidth=1.5; ctx.stroke();
+
+    /* initials */
+    const ini=t.name.split(/[\s_-]+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase();
+    ctx.fillStyle=dead?'#555':'#fff';
+    ctx.font='bold '+Math.max(9,c*0.3)+'px sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(ini,cx,cy);
+
+    /* HP bar */
+    if(!dead&&t.hpMax>0){
+      const bw=c*0.65, bh=Math.max(2,c*0.07);
+      const bx=cx-bw/2, by=cy+r+3;
+      const pct=Math.max(0,Math.min(1,t.hp/t.hpMax));
+      ctx.fillStyle='#111'; ctx.fillRect(bx,by,bw,bh);
+      ctx.fillStyle=pct>.5?'#2d8':'#f44';
+      ctx.fillRect(bx,by,bw*pct,bh);
+    }
+
+    /* name below HP bar */
+    if(c>25){
+      ctx.fillStyle=dead?'#444':'rgba(255,255,255,.5)';
+      ctx.font=Math.max(7,c*0.18)+'px sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='top';
+      const nm=t.name.length>8?t.name.slice(0,7)+'…':t.name;
+      ctx.fillText(nm,cx,cy+r+Math.max(4,c*0.12));
+    }
+  });
+
+  /* measure line */
+  if(G.measure&&G.mFrom!=null&&G.mTo!=null){
+    const a=combatants.find(x=>x.id===G.mFrom);
+    const b=combatants.find(x=>x.id===G.mTo);
+    if(a&&b&&a.gridX!=null&&b.gridX!=null){
+      const p1=gridCellCenter(a.gridX,a.gridY);
+      const p2=gridCellCenter(b.gridX,b.gridY);
+      ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y);
+      ctx.strokeStyle='rgba(255,220,0,.7)'; ctx.lineWidth=2;
+      ctx.setLineDash([6,4]); ctx.stroke(); ctx.setLineDash([]);
+      const dist=gridDist(a,b);
+      const mx=(p1.x+p2.x)/2, my=(p1.y+p2.y)/2;
+      ctx.fillStyle='#000'; ctx.font='bold 13px sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      const txt=dist+'m';
+      const tw=ctx.measureText(txt).width;
+      ctx.fillRect(mx-tw/2-4,my-8,tw+8,16);
+      ctx.fillStyle='#ffdc00'; ctx.fillText(txt,mx,my);
+    }
+  }
+}
+
+function gridToggleMeasure(){
+  G.measure=!G.measure; G.mFrom=null; G.mTo=null;
+  const btn=document.getElementById('gridMeasBtn');
+  if(btn) btn.classList.toggle('active',G.measure);
+  document.getElementById('gridInfo').textContent=
+    G.measure?'📏 MEASURE — tap two tokens to show distance':'Tap token to select · Drag to move';
+  gridDraw();
+}
+
+/* ---- POINTER EVENTS ---- */
+let gridBound=false;
+function gridBindEvents(cv){
+  if(gridBound) return; gridBound=true;
+  cv.addEventListener('pointerdown',gridPDown);
+  cv.addEventListener('pointermove',gridPMove);
+  cv.addEventListener('pointerup',gridPUp);
+  cv.addEventListener('pointercancel',gridPUp);
+  cv.addEventListener('wheel',gridWheel,{passive:false});
+}
+
+function gridPtrXY(e){
+  const cv=document.getElementById('gridCanvas');
+  const r=cv.getBoundingClientRect();
+  return {x:e.clientX-r.left, y:e.clientY-r.top};
+}
+
+function gridPDown(e){
+  e.preventDefault();
+  const cv=document.getElementById('gridCanvas');
+  cv.setPointerCapture(e.pointerId);
+  G.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+
+  /* pinch start */
+  if(G.pointers.size===2){
+    const pts=[...G.pointers.values()];
+    G.pinchD0=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y);
+    G.panning=false; G.drag=null;
+    return;
+  }
+
+  const p=gridPtrXY(e);
+  const gc=gridScreenToCell(p.x,p.y);
+  const tok=gridTokenAt(gc.x,gc.y);
+
+  if(tok){
+    G.drag=tok.id; G.dragSX=p.x; G.dragSY=p.y; G.dragMoved=false;
+    cv.style.cursor='grabbing';
+  } else if(gridPlaceMode){
+    /* cover placement mode: place on tap */
+    gridPlaceCoverAt(gc.x,gc.y);
+    return;
+  } else {
+    G.panning=true; G.panSX=p.x; G.panSY=p.y;
+    G.panOX0=G.ox; G.panOY0=G.oy;
+    cv.style.cursor='grabbing';
+  }
+}
+
+function gridPMove(e){
+  e.preventDefault();
+  G.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+
+  /* pinch zoom */
+  if(G.pointers.size===2){
+    const pts=[...G.pointers.values()];
+    const d=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y);
+    if(G.pinchD0>0){
+      const scale=d/G.pinchD0;
+      const midX=(pts[0].x+pts[1].x)/2;
+      const midY=(pts[0].y+pts[1].y)/2;
+      const cv=document.getElementById('gridCanvas');
+      const r=cv.getBoundingClientRect();
+      const mx=midX-r.left, my=midY-r.top;
+      const oldZ=G.zoom;
+      G.zoom=Math.max(0.15,Math.min(5,oldZ*scale));
+      G.ox=mx-(mx-G.ox)*(G.zoom/oldZ);
+      G.oy=my-(my-G.oy)*(G.zoom/oldZ);
+      G.pinchD0=d;
+      gridDraw();
+    }
+    return;
+  }
+
+  const p=gridPtrXY(e);
+
+  if(G.drag){
+    const dx=Math.abs(p.x-G.dragSX), dy=Math.abs(p.y-G.dragSY);
+    if(dx>5||dy>5) G.dragMoved=true;
+    if(G.dragMoved){
+      const gc=gridScreenToCell(p.x,p.y);
+      const t=combatants.find(x=>x.id===G.drag);
+      if(t&&gc.x>=0&&gc.x<G.cols&&gc.y>=0&&gc.y<G.rows){
+        const occ=gridTokenAt(gc.x,gc.y);
+        if(!occ||occ.id===G.drag){ t.gridX=gc.x; t.gridY=gc.y; gridDraw(); }
+      }
+    }
+  } else if(G.panning){
+    G.ox=G.panOX0+(p.x-G.panSX);
+    G.oy=G.panOY0+(p.y-G.panSY);
+    gridDraw();
+  }
+}
+
+function gridPUp(e){
+  e.preventDefault();
+  const cv=document.getElementById('gridCanvas');
+  cv.releasePointerCapture(e.pointerId);
+  G.pointers.delete(e.pointerId);
+  cv.style.cursor='grab';
+
+  if(G.drag&&!G.dragMoved){
+    /* tap on token = select or measure */
+    if(G.measure){
+      if(!G.mFrom) G.mFrom=G.drag;
+      else { G.mTo=G.drag; }
+      gridDraw();
+      if(G.mFrom&&G.mTo){
+        const a=combatants.find(x=>x.id===G.mFrom);
+        const b=combatants.find(x=>x.id===G.mTo);
+        if(a&&b) document.getElementById('gridInfo').textContent='📏 '+a.name+' → '+b.name+': '+gridDist(a,b)+'m';
+        setTimeout(()=>{ G.mFrom=null; G.mTo=null; },3000);
+      }
+    } else {
+      G.sel=G.sel===G.drag?null:G.drag;
+      const t=G.sel?combatants.find(x=>x.id===G.sel):null;
+      document.getElementById('gridInfo').textContent=t
+        ? '★ '+t.name+' · HP '+t.hp+'/'+t.hpMax+(t.init?' · Init '+t.init:'')
+        : 'Tap token to select · Drag to move';
+    }
+    gridDraw();
+  }
+
+  if(G.drag){ save(); }
+  G.drag=null; G.panning=false;
+}
+
+function gridWheel(e){
+  e.preventDefault();
+  const p=gridPtrXY(e);
+  const oldZ=G.zoom;
+  const delta=e.deltaY>0?0.9:1.1;
+  G.zoom=Math.max(0.15,Math.min(5,G.zoom*delta));
+  G.ox=p.x-(p.x-G.ox)*(G.zoom/oldZ);
+  G.oy=p.y-(p.y-G.oy)*(G.zoom/oldZ);
+  gridDraw();
+}
+
+/* ---- QUICK COVER PLACEMENT ON GRID ---- */
+const COVER_TYPES=[
+  {name:'Steel',thick:50,thin:25},
+  {name:'Stone',thick:40,thin:20},
+  {name:'Bulletproof Glass',thick:30,thin:15},
+  {name:'Concrete',thick:25,thin:10},
+  {name:'Wood',thick:20,thin:5},
+  {name:'Plaster/Foam/Plastic',thick:15,thin:0}
+];
+let gridPlaceMode=null; /* null or {name,hp} */
+
+function gridAddCover(){
+  let html='<div style="max-height:60vh;overflow-y:auto;">';
+  COVER_TYPES.forEach((ct,i)=>{
+    const thickOk=ct.thick>0, thinOk=ct.thin>0;
+    html+='<div style="padding:8px 4px;border-bottom:1px solid var(--line);">'+
+      '<div style="font-weight:700;font-size:13px;margin-bottom:4px;">'+ct.name+'</div>'+
+      '<div style="display:flex;gap:8px;">'+
+      (thickOk?'<button class="btn ghost sm" onclick="gridStartPlace('+i+',\'thick\')">Thick '+ct.thick+' HP</button>':'')+
+      (thinOk?'<button class="btn ghost sm" onclick="gridStartPlace('+i+',\'thin\')">Thin '+ct.thin+' HP</button>'
+        :'<span style="color:var(--muted);font-size:11px;padding:6px;">Thin = not cover</span>')+
+      '</div></div>';
+  });
+  html+='<div style="padding:8px 4px;border-top:2px solid var(--line);margin-top:4px;">'+
+    '<div style="font-weight:700;font-size:13px;margin-bottom:4px;">Custom Cover</div>'+
+    '<div class="row"><div class="field"><label class="sl">NAME</label><input id="ccName" placeholder="Dumpster"></div>'+
+    '<div class="field"><label class="sl">HP</label><input id="ccHP" type="number" inputmode="numeric" placeholder="25"></div></div>'+
+    '<button class="btn ghost sm" onclick="gridStartPlaceCustom()">Place Custom</button></div>';
+  html+='</div>';
+  showModal('Place Cover on Map',html);
+}
+
+function gridStartPlace(idx,thickness){
+  const ct=COVER_TYPES[idx];
+  const hp=thickness==='thick'?ct.thick:ct.thin;
+  if(!hp){ toast('Not cover at this thickness'); return; }
+  gridPlaceMode={name:ct.name+' ('+thickness+')',hp:hp};
+  document.getElementById('tempModal').classList.remove('open');
+  document.getElementById('gridInfo').textContent='📍 TAP A CELL to place '+gridPlaceMode.name+' · '+hp+' HP';
+}
+
+function gridStartPlaceCustom(){
+  const name=(document.getElementById('ccName').value||'').trim()||'Cover';
+  const hp=parseInt(document.getElementById('ccHP').value)||25;
+  gridPlaceMode={name:name,hp:hp};
+  document.getElementById('tempModal').classList.remove('open');
+  document.getElementById('gridInfo').textContent='📍 TAP A CELL to place '+name+' · '+hp+' HP';
+}
+
+function gridPlaceCoverAt(gx,gy){
+  if(!gridPlaceMode) return;
+  if(gridTokenAt(gx,gy)){ toast('Cell occupied'); return; }
+  if(gx<0||gx>=G.cols||gy<0||gy>=G.rows) return;
+  const c={ id:uid(), side:newSide, name:gridPlaceMode.name, hpMax:gridPlaceMode.hp, hp:gridPlaceMode.hp,
+    head:0, body:0, headMax:0, bodyMax:0,
+    init:0, weapons:[], injuries:[], loc:'body',
+    armorMode:'full', ablate:1, note:'', lastHit:'',
+    trackDeath:false, body_stat:5, deathSaves:0, deathResult:'', behindCoverId:null, onFire:false,
+    canDodge:false, dodgeBase:0,
+    cn:0, useCN:false, ncn:0, ncnAuto:true, checkResult:'',
+    isCover:true, gridX:gx, gridY:gy };
+  migrateCombatants([c]);
+  combatants.push(c);
+  gridPlaceMode=null;
+  document.getElementById('gridInfo').textContent='✓ Cover placed · Tap token to select · Drag to move';
+  save(); renderCombat(); gridDraw();
+}
+
 /* ============ INIT ============ */
 setSide('enemy');
 document.getElementById('sortLabel').textContent='SORT: '+(sortMode==='init'?'INIT':'ADDED');
 renderTimeline(); renderCombat(); renderNotes(); renderLog(); renderRoster(); renderVehicleList(); renderArchitectureList(); calcRefresh(); syncStickyOffsets();
 </script>
+<div id="gridOverlay" class="grid-overlay">
+  <div class="grid-hdr">
+    <span class="grid-title">🗺 BATTLE MAP</span>
+    <div class="grid-tools">
+      <button class="grid-btn" id="gridMeasBtn" onclick="gridToggleMeasure()" title="Measure">📏</button>
+      <button class="grid-btn" onclick="gridAddCover()" title="Add cover">▨</button>
+      <button class="grid-btn" onclick="gridResetView()" title="Reset view">⟲</button>
+      <button class="grid-btn" onclick="gridResize()" title="Grid size">⊞</button>
+      <button class="grid-btn" onclick="closeGrid()">✕</button>
+    </div>
+  </div>
+  <canvas id="gridCanvas"></canvas>
+  <div class="grid-ftr"><span id="gridInfo">Tap token to select · Drag to move</span></div>
+</div>
 </body>
 </html>
