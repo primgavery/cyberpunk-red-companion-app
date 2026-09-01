@@ -7627,7 +7627,20 @@ const G={cols:20,rows:20,cell:40,ox:0,oy:0,zoom:1,sel:null,
   drag:null,dragSX:0,dragSY:0,dragMoved:false,
   panSX:0,panSY:0,panning:false,
   measure:false,mFrom:null,mTo:null,
-  pointers:new Map(),pinchD0:0};
+  pointers:new Map(),pinchD0:0,
+  coverStart:null,coverEnd:null,
+  floorDeco:[]}; /* {type:'lane'|'sidewalk'|'asphalt', ...} */
+
+/* ---- TOKEN IMAGE CACHE ---- */
+const gridImgCache=new Map();
+function gridGetImage(dataUrl){
+  if(gridImgCache.has(dataUrl)) return gridImgCache.get(dataUrl);
+  const img=new Image();
+  img.src=dataUrl;
+  img.onload=function(){ gridDraw(); }; /* redraw once loaded */
+  gridImgCache.set(dataUrl,img);
+  return img;
+}
 
 function openGrid(){
   const ov=document.getElementById('gridOverlay');
@@ -7674,25 +7687,31 @@ function gridResize(){
 }
 
 function gridAutoPlace(){
-  const taken=new Set();
-  combatants.forEach(c=>{
-    if(c.gridX!=null&&c.gridY!=null) taken.add(c.gridX+','+c.gridY);
-  });
   combatants.forEach(c=>{
     if(c.gridX!=null&&c.gridY!=null) return;
     const sc=c.side==='enemy'?G.cols-3:2;
     const dir=c.side==='enemy'?-1:1;
     for(let r=1;r<G.rows-1;r++){
       for(let col=sc;col>=0&&col<G.cols;col+=dir){
-        const k=col+','+r;
-        if(!taken.has(k)){ c.gridX=col; c.gridY=r; taken.add(k); return; }
+        if(!gridTokenAt(col,r)){ c.gridX=col; c.gridY=r; return; }
       }
     }
   });
 }
 
 function gridTokenAt(gx,gy){
-  return combatants.find(c=>c.gridX===gx&&c.gridY===gy);
+  return combatants.find(c=>{
+    if(c.gridX==null||c.gridY==null) return false;
+    const w=c.gridW||1, h=c.gridH||1;
+    return gx>=c.gridX&&gx<c.gridX+w&&gy>=c.gridY&&gy<c.gridY+h;
+  });
+}
+function gridCellsFree(x,y,w,h,ignore){
+  for(let dy=0;dy<h;dy++) for(let dx=0;dx<w;dx++){
+    const t=gridTokenAt(x+dx,y+dy);
+    if(t&&t.id!==ignore) return false;
+  }
+  return true;
 }
 function gridScreenToCell(sx,sy){
   const c=G.cell*G.zoom;
@@ -7707,6 +7726,223 @@ function gridDist(a,b){
   return Math.round(Math.sqrt(dx*dx+dy*dy)*2); /* 2m per cell */
 }
 
+/* ---- GRID SPRITES (top-down canvas-drawn objects) ---- */
+const CAR_COLORS=['#2a3a5c','#8b1a1a','#c8c8c8','#1a1a1a','#2e5a3e','#5c4a2a','#4a4a6a','#6a3030'];
+function gridSpriteCar(ctx,x,y,w,h,c,seed){
+  const horiz=w>h;
+  const col=CAR_COLORS[seed%CAR_COLORS.length];
+  const p=c*0.08; /* padding */
+  ctx.save();
+  if(!horiz){ ctx.translate(x+w/2,y+h/2); ctx.rotate(Math.PI/2); ctx.translate(-h/2,-w/2); x=0;y=0; const tmp=w;w=h;h=tmp; }
+  /* body */
+  const br=Math.min(c*0.12,4);
+  ctx.beginPath(); ctx.roundRect(x+p,y+p,w-p*2,h-p*2,br); ctx.fillStyle=col; ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,.3)'; ctx.lineWidth=1; ctx.stroke();
+  /* windshield (front ~30%) */
+  const wy=y+p, wh=h-p*2, wx1=x+w*0.6, wx2=x+w-p*2;
+  ctx.fillStyle='rgba(120,180,220,.5)';
+  ctx.beginPath();
+  ctx.moveTo(wx1,wy+wh*0.15); ctx.lineTo(wx2,wy+wh*0.05);
+  ctx.lineTo(wx2,wy+wh*0.95); ctx.lineTo(wx1,wy+wh*0.85); ctx.closePath(); ctx.fill();
+  /* rear window */
+  const rx1=x+p*2, rx2=x+w*0.3;
+  ctx.fillStyle='rgba(100,150,190,.35)';
+  ctx.beginPath();
+  ctx.moveTo(rx2,wy+wh*0.2); ctx.lineTo(rx1,wy+wh*0.1);
+  ctx.lineTo(rx1,wy+wh*0.9); ctx.lineTo(rx2,wy+wh*0.8); ctx.closePath(); ctx.fill();
+  /* wheels */
+  ctx.fillStyle='#111';
+  const ww=Math.max(2,c*0.1), wht=Math.max(1.5,c*0.06);
+  ctx.fillRect(x+w*0.18,y,ww,wht); ctx.fillRect(x+w*0.18,y+h-wht,ww,wht);
+  ctx.fillRect(x+w*0.7,y,ww,wht); ctx.fillRect(x+w*0.7,y+h-wht,ww,wht);
+  /* headlights */
+  ctx.fillStyle='rgba(255,255,200,.4)';
+  ctx.fillRect(x+w-p-1,y+p+2,2,3); ctx.fillRect(x+w-p-1,y+h-p-5,2,3);
+  /* taillights */
+  ctx.fillStyle='rgba(255,50,30,.5)';
+  ctx.fillRect(x+p,y+p+2,2,2); ctx.fillRect(x+p,y+h-p-4,2,2);
+  ctx.restore();
+}
+
+function gridSpriteDumpster(ctx,x,y,w,h,c){
+  const p=c*0.06;
+  ctx.fillStyle='#3a5a3a'; ctx.fillRect(x+p,y+p,w-p*2,h-p*2);
+  ctx.strokeStyle='#2a4a2a'; ctx.lineWidth=1.5; ctx.strokeRect(x+p,y+p,w-p*2,h-p*2);
+  /* lid line */
+  ctx.strokeStyle='rgba(0,0,0,.3)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(x+p,y+h*0.45); ctx.lineTo(x+w-p,y+h*0.45); ctx.stroke();
+  /* handles */
+  ctx.fillStyle='#222';
+  ctx.fillRect(x+w*0.2,y+p-1,w*0.15,2);
+  ctx.fillRect(x+w*0.65,y+p-1,w*0.15,2);
+  /* lid texture */
+  ctx.fillStyle='rgba(80,120,80,.3)'; ctx.fillRect(x+p+1,y+p+1,w-p*2-2,(h*0.45)-p-1);
+}
+
+function gridSpriteBarrel(ctx,x,y,w,h,c){
+  const cx=x+w/2, cy=y+h/2, r=Math.min(w,h)*0.4;
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.fillStyle='#5a4030'; ctx.fill();
+  ctx.strokeStyle='#3a2a1a'; ctx.lineWidth=1.5; ctx.stroke();
+  /* bands */
+  ctx.strokeStyle='rgba(100,80,60,.5)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(cx,cy,r*0.65,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx,cy,r*0.35,0,Math.PI*2); ctx.stroke();
+  /* highlight */
+  ctx.beginPath(); ctx.arc(cx-r*0.2,cy-r*0.2,r*0.15,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,.08)'; ctx.fill();
+}
+
+function gridSpriteCrate(ctx,x,y,w,h,c){
+  const p=c*0.05;
+  ctx.fillStyle='#6a4a28'; ctx.fillRect(x+p,y+p,w-p*2,h-p*2);
+  ctx.strokeStyle='#4a3018'; ctx.lineWidth=1; ctx.strokeRect(x+p,y+p,w-p*2,h-p*2);
+  /* cross boards */
+  ctx.strokeStyle='rgba(90,60,30,.5)'; ctx.lineWidth=Math.max(1,c*0.04);
+  ctx.beginPath(); ctx.moveTo(x+p,y+p); ctx.lineTo(x+w-p,y+h-p); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x+w-p,y+p); ctx.lineTo(x+p,y+h-p); ctx.stroke();
+  /* center band */
+  ctx.fillStyle='rgba(80,50,25,.4)';
+  ctx.fillRect(x+p,y+h*0.42,w-p*2,h*0.16);
+}
+
+function gridSpriteHydrant(ctx,x,y,w,h,c){
+  const cx=x+w/2, cy=y+h/2, r=Math.min(w,h)*0.3;
+  /* base */
+  ctx.beginPath(); ctx.arc(cx,cy,r*1.2,0,Math.PI*2);
+  ctx.fillStyle='rgba(60,60,60,.4)'; ctx.fill();
+  /* body */
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.fillStyle='#cc3333'; ctx.fill();
+  ctx.strokeStyle='#992222'; ctx.lineWidth=1; ctx.stroke();
+  /* cap */
+  ctx.beginPath(); ctx.arc(cx,cy,r*0.4,0,Math.PI*2);
+  ctx.fillStyle='#dd4444'; ctx.fill();
+  /* nozzles */
+  ctx.fillStyle='#aa2828';
+  ctx.fillRect(cx-r*1.1,cy-r*0.15,r*0.4,r*0.3);
+  ctx.fillRect(cx+r*0.7,cy-r*0.15,r*0.4,r*0.3);
+}
+
+function gridSpriteDesk(ctx,x,y,w,h,c){
+  const p=c*0.06;
+  ctx.fillStyle='#5a4535'; ctx.fillRect(x+p,y+p,w-p*2,h-p*2);
+  ctx.strokeStyle='#3a2a1a'; ctx.lineWidth=1; ctx.strokeRect(x+p,y+p,w-p*2,h-p*2);
+  /* monitor */
+  ctx.fillStyle='rgba(40,60,80,.6)';
+  ctx.fillRect(x+w*0.55,y+h*0.25,w*0.3,h*0.5);
+  /* keyboard */
+  ctx.fillStyle='rgba(50,50,50,.5)';
+  ctx.fillRect(x+w*0.15,y+h*0.35,w*0.3,h*0.3);
+}
+
+function gridSpriteShelves(ctx,x,y,w,h,c){
+  const p=c*0.04;
+  ctx.fillStyle='rgba(90,70,45,.5)'; ctx.fillRect(x+p,y+p,w-p*2,h-p*2);
+  ctx.strokeStyle='#5a4020'; ctx.lineWidth=1; ctx.strokeRect(x+p,y+p,w-p*2,h-p*2);
+  /* shelf lines */
+  const rows=Math.max(2,Math.floor(h/(c*0.3)));
+  ctx.strokeStyle='rgba(70,50,25,.6)'; ctx.lineWidth=1;
+  for(let i=1;i<rows;i++){
+    const ly=y+p+(h-p*2)*i/rows;
+    ctx.beginPath(); ctx.moveTo(x+p,ly); ctx.lineTo(x+w-p,ly); ctx.stroke();
+  }
+  /* item dots */
+  ctx.fillStyle='rgba(150,130,100,.3)';
+  for(let i=0;i<rows;i++){
+    const iy=y+p+(h-p*2)*(i+0.5)/rows;
+    for(let j=0;j<3;j++){
+      ctx.fillRect(x+p+2+j*(w-p*2)/3.5,iy-2,Math.max(3,c*0.1),4);
+    }
+  }
+}
+
+function gridSpriteCounter(ctx,x,y,w,h,c){
+  const p=c*0.05;
+  ctx.fillStyle='#6a5a4a'; ctx.fillRect(x+p,y+p,w-p*2,h-p*2);
+  ctx.strokeStyle='#4a3a2a'; ctx.lineWidth=1.5; ctx.strokeRect(x+p,y+p,w-p*2,h-p*2);
+  /* top surface highlight */
+  ctx.fillStyle='rgba(255,255,255,.05)'; ctx.fillRect(x+p+1,y+p+1,w-p*2-2,h*0.3);
+}
+
+function gridSpriteForklift(ctx,x,y,w,h,c){
+  const p=c*0.08;
+  /* body */
+  ctx.fillStyle='#c8a820'; ctx.fillRect(x+p,y+h*0.3,w-p*2,h*0.5);
+  ctx.strokeStyle='#9a8010'; ctx.lineWidth=1; ctx.strokeRect(x+p,y+h*0.3,w-p*2,h*0.5);
+  /* forks */
+  ctx.fillStyle='#666';
+  ctx.fillRect(x+w*0.2,y+p,w*0.12,h*0.35);
+  ctx.fillRect(x+w*0.6,y+p,w*0.12,h*0.35);
+  /* wheels */
+  ctx.fillStyle='#222';
+  ctx.beginPath(); ctx.arc(x+w*0.25,y+h*0.85,c*0.08,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x+w*0.75,y+h*0.85,c*0.08,0,Math.PI*2); ctx.fill();
+  /* seat */
+  ctx.fillStyle='#333'; ctx.fillRect(x+w*0.35,y+h*0.4,w*0.3,h*0.15);
+}
+
+function gridSpriteWall(ctx,x,y,w,h,c,n){
+  const isSteel=n.includes('steel')||n.includes('metal');
+  const p=1;
+  ctx.fillStyle=isSteel?'#4a5060':'#6a6058';
+  ctx.fillRect(x+p,y+p,w-p*2,h-p*2);
+  ctx.strokeStyle=isSteel?'#5a6070':'#7a706a'; ctx.lineWidth=1;
+  ctx.strokeRect(x+p,y+p,w-p*2,h-p*2);
+  /* brick/panel pattern */
+  if(c>12){
+    ctx.strokeStyle=isSteel?'rgba(80,90,110,.3)':'rgba(100,80,70,.3)';
+    ctx.lineWidth=0.5;
+    const bh=Math.max(3,c*0.2);
+    for(let by=y+p;by<y+h-p;by+=bh){
+      ctx.beginPath(); ctx.moveTo(x+p,by); ctx.lineTo(x+w-p,by); ctx.stroke();
+      const off=(Math.floor((by-y)/bh)%2)*c*0.25;
+      for(let bx=x+p+off;bx<x+w-p;bx+=c*0.5){
+        ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(bx,by+bh); ctx.stroke();
+      }
+    }
+  }
+}
+
+function gridSpriteBarrier(ctx,x,y,w,h,c){
+  const p=c*0.06;
+  ctx.fillStyle='#7a7268'; ctx.fillRect(x+p,y+p,w-p*2,h-p*2);
+  ctx.strokeStyle='#5a524a'; ctx.lineWidth=1; ctx.strokeRect(x+p,y+p,w-p*2,h-p*2);
+  /* hazard stripes */
+  if(c>14){
+    ctx.save(); ctx.globalAlpha=0.2;
+    ctx.strokeStyle='#ffaa00'; ctx.lineWidth=Math.max(1,c*0.06);
+    for(let i=-h;i<w;i+=Math.max(4,c*0.15)){
+      ctx.beginPath(); ctx.moveTo(x+p+i,y+p); ctx.lineTo(x+p+i+h,y+h-p); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function gridSpriteCubicle(ctx,x,y,w,h,c){
+  const p=c*0.05;
+  /* partition walls */
+  ctx.fillStyle='rgba(80,90,100,.4)'; ctx.fillRect(x+p,y+p,w-p*2,h-p*2);
+  ctx.strokeStyle='rgba(100,110,120,.5)'; ctx.lineWidth=1.5; ctx.strokeRect(x+p,y+p,w-p*2,h-p*2);
+  /* inner desk area */
+  ctx.fillStyle='rgba(70,55,40,.3)'; ctx.fillRect(x+w*0.2,y+h*0.2,w*0.6,h*0.6);
+}
+
+function gridSpriteGeneric(ctx,x,y,w,h,c,n){
+  const isGlass=n.includes('glass');
+  const p=c*0.05;
+  ctx.fillStyle=isGlass?'rgba(80,160,200,.25)':'rgba(100,100,100,.4)';
+  ctx.fillRect(x+p,y+p,w-p*2,h-p*2);
+  ctx.strokeStyle=isGlass?'rgba(100,200,240,.5)':'rgba(150,150,150,.5)';
+  ctx.lineWidth=1.5; ctx.strokeRect(x+p,y+p,w-p*2,h-p*2);
+  if(c>14){
+    ctx.fillStyle='rgba(255,255,255,.5)'; ctx.font=Math.max(7,c*0.2)+'px sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    const label=n.length>8?n.slice(0,7)+'…':n;
+    ctx.fillText(label,x+w/2,y+h/2);
+  }
+}
+
 function gridDraw(){
   const cv=document.getElementById('gridCanvas');
   if(!cv) return;
@@ -7715,8 +7951,18 @@ function gridDraw(){
   const c=G.cell*G.zoom;
   ctx.clearRect(0,0,w,h);
 
+  /* floor tiles — subtle checkerboard */
+  for(let gy=0;gy<G.rows;gy++){
+    for(let gx=0;gx<G.cols;gx++){
+      const sx=G.ox+gx*c, sy=G.oy+gy*c;
+      if(sx+c<0||sy+c<0||sx>w||sy>h) continue;
+      ctx.fillStyle=(gx+gy)%2===0?'rgba(255,255,255,.02)':'rgba(0,0,0,.02)';
+      ctx.fillRect(sx,sy,c,c);
+    }
+  }
+
   /* grid lines */
-  ctx.strokeStyle='rgba(255,255,255,.07)';
+  ctx.strokeStyle='rgba(255,255,255,.06)';
   ctx.lineWidth=1;
   for(let i=0;i<=G.cols;i++){
     const x=G.ox+i*c;
@@ -7728,61 +7974,119 @@ function gridDraw(){
   }
 
   /* boundary */
-  ctx.strokeStyle='rgba(255,255,255,.2)';
+  ctx.strokeStyle='rgba(255,255,255,.15)';
   ctx.lineWidth=2;
   ctx.strokeRect(G.ox,G.oy,G.cols*c,G.rows*c);
 
-  /* side labels */
-  ctx.fillStyle='rgba(0,229,255,.15)';
-  ctx.font='bold '+Math.max(10,c*0.5)+'px sans-serif';
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText('ALLIES',G.ox+c*2,G.oy-Math.max(8,c*0.3));
-  ctx.fillStyle='rgba(255,60,60,.15)';
-  ctx.fillText('ENEMIES',G.ox+(G.cols-2)*c,G.oy-Math.max(8,c*0.3));
-
-  /* active turn id */
   const turnId=activeId||null;
 
-  /* tokens */
-  combatants.forEach(t=>{
-    if(t.gridX==null||t.gridY==null) return;
-    const pos=gridCellCenter(t.gridX,t.gridY);
-    const cx=pos.x, cy=pos.y;
-    const r=c*0.38;
-
-    /* cover objects */
-    if(t.isCover){
-      const sx=G.ox+t.gridX*c+2, sy=G.oy+t.gridY*c+2;
-      const isVeh=t.isVehicle;
-      ctx.fillStyle=isVeh?'rgba(80,80,120,.5)':'rgba(100,100,100,.4)';
-      ctx.fillRect(sx,sy,c-4,(isVeh?c*2:c)-4);
-      ctx.strokeStyle=isVeh?'rgba(120,120,180,.6)':'rgba(150,150,150,.4)';
-      ctx.lineWidth=1;
-      ctx.strokeRect(sx,sy,c-4,(isVeh?c*2:c)-4);
-      ctx.fillStyle='#aaa';
-      ctx.font=Math.max(8,c*0.22)+'px sans-serif';
-      ctx.textAlign='center'; ctx.textBaseline='middle';
-      const label=t.name.length>6?t.name.slice(0,5)+'…':t.name;
-      ctx.fillText(label,cx,cy);
-      /* HP text for cover */
-      if(t.hpMax>0){
-        ctx.font=Math.max(7,c*0.18)+'px sans-serif';
-        ctx.fillStyle='#888';
-        ctx.fillText(t.hp+'/'+t.hpMax,cx,cy+c*0.28);
+  /* ---- FLOOR DECORATIONS ---- */
+  G.floorDeco.forEach(d=>{
+    if(d.type==='asphalt'){
+      ctx.fillStyle='rgba(40,42,45,.4)';
+      ctx.fillRect(G.ox+d.x*c,G.oy+d.y*c,d.w*c,d.h*c);
+    } else if(d.type==='sidewalk'){
+      ctx.fillStyle='rgba(80,78,72,.2)';
+      ctx.fillRect(G.ox+d.x*c,G.oy+d.y*c,d.w*c,d.h*c);
+      /* sidewalk cracks */
+      if(c>12){
+        ctx.strokeStyle='rgba(100,95,85,.15)'; ctx.lineWidth=0.5;
+        for(let i=0;i<d.w;i++){
+          ctx.beginPath(); ctx.moveTo(G.ox+(d.x+i)*c,G.oy+d.y*c);
+          ctx.lineTo(G.ox+(d.x+i)*c,G.oy+(d.y+d.h)*c); ctx.stroke();
+        }
       }
+    } else if(d.type==='lane'){
+      /* dashed center line */
+      ctx.strokeStyle='rgba(220,200,50,.35)'; ctx.lineWidth=Math.max(1,c*0.06);
+      ctx.setLineDash([c*0.4,c*0.3]);
+      const ly=G.oy+(d.y+0.5)*c;
+      ctx.beginPath(); ctx.moveTo(G.ox+d.x*c,ly); ctx.lineTo(G.ox+(d.x+d.w)*c,ly); ctx.stroke();
+      ctx.setLineDash([]);
+    } else if(d.type==='parking'){
+      /* parking space lines */
+      ctx.strokeStyle='rgba(255,255,255,.12)'; ctx.lineWidth=1;
+      for(let i=d.x;i<=d.x+d.w;i+=2){
+        ctx.beginPath(); ctx.moveTo(G.ox+i*c,G.oy+d.y*c);
+        ctx.lineTo(G.ox+i*c,G.oy+(d.y+d.h)*c); ctx.stroke();
+      }
+    }
+  });
+
+  /* ---- COVER OBJECTS (draw first, under tokens) ---- */
+  combatants.forEach(t=>{
+    if(!t.isCover||t.gridX==null) return;
+    const tw=t.gridW||1, th=t.gridH||1;
+    const sx=G.ox+t.gridX*c+1, sy=G.oy+t.gridY*c+1;
+    const sw=tw*c-2, sh=th*c-2;
+    const dead=t.hp<=0;
+    const cx=sx+sw/2, cy=sy+sh/2;
+
+    if(dead){
+      /* destroyed rubble */
+      ctx.fillStyle='rgba(30,30,30,.3)';
+      ctx.fillRect(sx,sy,sw,sh);
+      if(c>14){ ctx.fillStyle='#444'; ctx.font=Math.max(8,c*0.2)+'px sans-serif';
+        ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('✕',cx,cy); }
       return;
     }
 
+    /* shadow */
+    ctx.fillStyle='rgba(0,0,0,.25)';
+    ctx.fillRect(sx+2,sy+2,sw,sh);
+
+    /* detect sprite type from name */
+    const n=t.name.toLowerCase();
+    const seed=t.id.charCodeAt(0)+t.id.charCodeAt(t.id.length-1);
+    if(n.includes('car')||n.includes('vehicle')){ gridSpriteCar(ctx,sx,sy,sw,sh,c,seed); }
+    else if(n.includes('dumpster')){ gridSpriteDumpster(ctx,sx,sy,sw,sh,c); }
+    else if(n.includes('barrel')){ gridSpriteBarrel(ctx,sx,sy,sw,sh,c); }
+    else if(n.includes('crate')||n.includes('box')){ gridSpriteCrate(ctx,sx,sy,sw,sh,c); }
+    else if(n.includes('hydrant')){ gridSpriteHydrant(ctx,sx,sy,sw,sh,c); }
+    else if(n.includes('desk')){ gridSpriteDesk(ctx,sx,sy,sw,sh,c); }
+    else if(n.includes('shelf')||n.includes('shelves')){ gridSpriteShelves(ctx,sx,sy,sw,sh,c); }
+    else if(n.includes('counter')){ gridSpriteCounter(ctx,sx,sy,sw,sh,c); }
+    else if(n.includes('forklift')){ gridSpriteForklift(ctx,sx,sy,sw,sh,c); }
+    else if(n.includes('wall')||n.includes('building')){ gridSpriteWall(ctx,sx,sy,sw,sh,c,n); }
+    else if(n.includes('barrier')){ gridSpriteBarrier(ctx,sx,sy,sw,sh,c); }
+    else if(n.includes('cubicle')){ gridSpriteCubicle(ctx,sx,sy,sw,sh,c); }
+    else { gridSpriteGeneric(ctx,sx,sy,sw,sh,c,n); }
+
+    /* selected ring */
+    if(t.id===G.sel){ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.strokeRect(sx-1,sy-1,sw+2,sh+2);}
+
+    /* HP bar on hover/zoom */
+    if(!dead&&t.hpMax>0&&c>18){
+      const bw=Math.min(sw*0.8,60), bh=3;
+      const bx=cx-bw/2, by=cy+sh*0.35;
+      const pct=Math.max(0,t.hp/t.hpMax);
+      ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(bx,by,bw,bh);
+      ctx.fillStyle=pct>.5?'#4a4':'#c44'; ctx.fillRect(bx,by,bw*pct,bh);
+      ctx.fillStyle='rgba(255,255,255,.45)'; ctx.font=Math.max(7,c*0.15)+'px sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='top';
+      ctx.fillText(t.hp+'/'+t.hpMax,cx,by+4);
+    }
+  });
+
+  /* ---- CHARACTER TOKENS ---- */
+  combatants.forEach(t=>{
+    if(t.isCover||t.gridX==null||t.gridY==null) return;
+    const pos=gridCellCenter(t.gridX,t.gridY);
+    const cx=pos.x, cy=pos.y;
+    const r=c*0.38;
     const isAlly=t.side!=='enemy';
     const dead=t.hp<=0;
 
     /* active turn glow */
     if(t.id===turnId&&!dead){
-      ctx.beginPath(); ctx.arc(cx,cy,r+6,0,Math.PI*2);
-      ctx.fillStyle=isAlly?'rgba(0,229,255,.12)':'rgba(255,60,60,.12)';
-      ctx.fill();
-      ctx.strokeStyle=isAlly?'rgba(0,229,255,.6)':'rgba(255,60,60,.6)';
-      ctx.lineWidth=2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx,cy,r+8,0,Math.PI*2);
+      const grd=ctx.createRadialGradient(cx,cy,r,cx,cy,r+8);
+      grd.addColorStop(0,isAlly?'rgba(0,229,255,.3)':'rgba(255,60,60,.3)');
+      grd.addColorStop(1,'transparent');
+      ctx.fillStyle=grd; ctx.fill();
+      ctx.beginPath(); ctx.arc(cx,cy,r+4,0,Math.PI*2);
+      ctx.strokeStyle=isAlly?'#00e5ff':'#ff4444';
+      ctx.lineWidth=2.5; ctx.stroke();
     }
 
     /* selection ring */
@@ -7791,37 +8095,76 @@ function gridDraw(){
       ctx.strokeStyle='#fff'; ctx.lineWidth=2.5; ctx.stroke();
     }
 
-    /* token body */
-    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
-    ctx.fillStyle=dead?'#2a2a2a':(isAlly?'rgba(0,180,230,.85)':'rgba(220,50,50,.85)');
-    ctx.fill();
-    ctx.strokeStyle=dead?'#444':(isAlly?'#00e5ff':'#ff4444');
-    ctx.lineWidth=1.5; ctx.stroke();
+    /* shadow */
+    ctx.beginPath(); ctx.arc(cx+1,cy+1,r,0,Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fill();
 
-    /* initials */
-    const ini=t.name.split(/[\s_-]+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase();
-    ctx.fillStyle=dead?'#555':'#fff';
-    ctx.font='bold '+Math.max(9,c*0.3)+'px sans-serif';
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(ini,cx,cy);
+    /* check for character portrait image */
+    const rChar=t.rosterId?rosterFind(t.rosterId):null;
+    const portrait=(rChar&&rChar.images&&rChar.images.length)?rChar.images[0].data:null;
+    let drewImage=false;
+
+    if(portrait&&!dead&&c>18){
+      /* draw circular clipped portrait */
+      const img=gridGetImage(portrait);
+      if(img&&img.complete&&img.naturalWidth>0){
+        ctx.save();
+        ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
+        const sz=r*2;
+        const aspect=img.naturalWidth/img.naturalHeight;
+        let dw=sz, dh=sz;
+        if(aspect>1) dw=sz*aspect; else dh=sz/aspect;
+        ctx.drawImage(img,cx-dw/2,cy-dh/2,dw,dh);
+        ctx.restore();
+        /* colored border ring */
+        ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+        ctx.strokeStyle=isAlly?'#00e5ff':'#ff4444';
+        ctx.lineWidth=2.5; ctx.stroke();
+        drewImage=true;
+      }
+    }
+
+    if(!drewImage){
+      /* solid color token body */
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+      ctx.fillStyle=dead?'#2a2a2a':(isAlly?'#0099cc':'#cc2222');
+      ctx.fill();
+      ctx.strokeStyle=dead?'#444':(isAlly?'#00e5ff':'#ff4444');
+      ctx.lineWidth=2; ctx.stroke();
+
+      /* initials */
+      const ini=t.name.split(/[\s_-]+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase();
+      ctx.fillStyle=dead?'#555':'#fff';
+      ctx.font='bold '+Math.max(9,c*0.32)+'px sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(ini,cx,cy);
+    }
 
     /* HP bar */
     if(!dead&&t.hpMax>0){
-      const bw=c*0.65, bh=Math.max(2,c*0.07);
+      const bw=c*0.65, bh=Math.max(3,c*0.08);
       const bx=cx-bw/2, by=cy+r+3;
       const pct=Math.max(0,Math.min(1,t.hp/t.hpMax));
-      ctx.fillStyle='#111'; ctx.fillRect(bx,by,bw,bh);
-      ctx.fillStyle=pct>.5?'#2d8':'#f44';
+      ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(bx-0.5,by-0.5,bw+1,bh+1);
+      ctx.fillStyle=pct>.5?'#22cc66':(pct>.25?'#ddaa00':'#ee3333');
       ctx.fillRect(bx,by,bw*pct,bh);
     }
 
     /* name below HP bar */
     if(c>25){
-      ctx.fillStyle=dead?'#444':'rgba(255,255,255,.5)';
+      ctx.fillStyle=dead?'#444':'rgba(255,255,255,.6)';
       ctx.font=Math.max(7,c*0.18)+'px sans-serif';
       ctx.textAlign='center'; ctx.textBaseline='top';
       const nm=t.name.length>8?t.name.slice(0,7)+'…':t.name;
-      ctx.fillText(nm,cx,cy+r+Math.max(4,c*0.12));
+      ctx.fillText(nm,cx,cy+r+Math.max(6,c*0.14));
+    }
+
+    /* behind-cover indicator */
+    if(t.behindCoverId&&!dead&&c>20){
+      ctx.fillStyle='rgba(255,220,0,.8)';
+      ctx.font=Math.max(8,c*0.2)+'px sans-serif';
+      ctx.textAlign='left'; ctx.textBaseline='top';
+      ctx.fillText('🛡',cx+r*0.5,cy-r-2);
     }
   });
 
@@ -7837,14 +8180,18 @@ function gridDraw(){
       ctx.setLineDash([6,4]); ctx.stroke(); ctx.setLineDash([]);
       const dist=gridDist(a,b);
       const mx=(p1.x+p2.x)/2, my=(p1.y+p2.y)/2;
-      ctx.fillStyle='#000'; ctx.font='bold 13px sans-serif';
+      ctx.fillStyle='rgba(0,0,0,.7)'; ctx.font='bold 13px sans-serif';
       ctx.textAlign='center'; ctx.textBaseline='middle';
       const txt=dist+'m';
       const tw=ctx.measureText(txt).width;
-      ctx.fillRect(mx-tw/2-4,my-8,tw+8,16);
+      const rr=8; ctx.beginPath();
+      ctx.roundRect(mx-tw/2-6,my-rr,tw+12,rr*2,4); ctx.fill();
       ctx.fillStyle='#ffdc00'; ctx.fillText(txt,mx,my);
     }
   }
+
+  /* update combat HUD */
+  gridUpdateHUD();
 }
 
 function gridToggleMeasure(){
@@ -7895,8 +8242,9 @@ function gridPDown(e){
     G.drag=tok.id; G.dragSX=p.x; G.dragSY=p.y; G.dragMoved=false;
     cv.style.cursor='grabbing';
   } else if(gridPlaceMode){
-    /* cover placement mode: place on tap */
-    gridPlaceCoverAt(gc.x,gc.y);
+    /* cover placement mode: start rectangle drag */
+    G.coverStart={x:gc.x,y:gc.y}; G.coverEnd={x:gc.x,y:gc.y};
+    cv.style.cursor='crosshair';
     return;
   } else {
     G.panning=true; G.panSX=p.x; G.panSY=p.y;
@@ -7947,6 +8295,24 @@ function gridPMove(e){
     G.ox=G.panOX0+(p.x-G.panSX);
     G.oy=G.panOY0+(p.y-G.panSY);
     gridDraw();
+  } else if(G.coverStart){
+    const gc=gridScreenToCell(p.x,p.y);
+    G.coverEnd={x:Math.max(0,Math.min(G.cols-1,gc.x)),y:Math.max(0,Math.min(G.rows-1,gc.y))};
+    gridDraw();
+    /* draw preview rectangle */
+    const cv=document.getElementById('gridCanvas');
+    const ctx=cv.getContext('2d');
+    const c=G.cell*G.zoom;
+    const x1=Math.min(G.coverStart.x,G.coverEnd.x), y1=Math.min(G.coverStart.y,G.coverEnd.y);
+    const x2=Math.max(G.coverStart.x,G.coverEnd.x), y2=Math.max(G.coverStart.y,G.coverEnd.y);
+    ctx.fillStyle='rgba(150,150,150,.3)';
+    ctx.strokeStyle='rgba(200,200,200,.6)';
+    ctx.lineWidth=2;
+    ctx.fillRect(G.ox+x1*c,G.oy+y1*c,(x2-x1+1)*c,(y2-y1+1)*c);
+    ctx.strokeRect(G.ox+x1*c,G.oy+y1*c,(x2-x1+1)*c,(y2-y1+1)*c);
+    const cnt=(x2-x1+1)*(y2-y1+1);
+    ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(cnt+' cell'+(cnt>1?'s':''),G.ox+(x1+x2+1)/2*c,G.oy+(y1+y2+1)/2*c);
   }
 }
 
@@ -7979,7 +8345,33 @@ function gridPUp(e){
     gridDraw();
   }
 
-  if(G.drag){ save(); }
+  if(G.drag){ gridAutoAssignCover(); save(); }
+  /* finalize cover rectangle */
+  if(G.coverStart&&gridPlaceMode){
+    const x1=Math.min(G.coverStart.x,G.coverEnd.x), y1=Math.min(G.coverStart.y,G.coverEnd.y);
+    const x2=Math.max(G.coverStart.x,G.coverEnd.x), y2=Math.max(G.coverStart.y,G.coverEnd.y);
+    const gw=x2-x1+1, gh=y2-y1+1;
+    /* check all cells are free */
+    let blocked=false;
+    for(let dy=0;dy<gh&&!blocked;dy++) for(let dx=0;dx<gw&&!blocked;dx++){
+      if(gridTokenAt(x1+dx,y1+dy)) blocked=true;
+    }
+    if(!blocked){
+      const c={id:uid(),side:'enemy',name:gridPlaceMode.name,hpMax:gridPlaceMode.hp,hp:gridPlaceMode.hp,
+        head:0,body:0,headMax:0,bodyMax:0,init:0,weapons:[],injuries:[],loc:'body',
+        armorMode:'full',ablate:1,note:'',lastHit:'',trackDeath:false,body_stat:5,
+        deathSaves:0,deathResult:'',behindCoverId:null,onFire:false,canDodge:false,dodgeBase:0,
+        cn:0,useCN:false,ncn:0,ncnAuto:true,checkResult:'',
+        isCover:true,gridX:x1,gridY:y1,gridW:gw,gridH:gh};
+      migrateCombatants([c]);
+      combatants.push(c);
+      document.getElementById('gridInfo').textContent='✓ Placed '+gw+'×'+gh+' cover ('+gridPlaceMode.hp+' HP shared)';
+    } else { document.getElementById('gridInfo').textContent='⚠ Cells blocked — try another spot'; }
+    gridPlaceMode=null; G.coverStart=null; G.coverEnd=null;
+    save(); renderCombat(); gridDraw();
+    return;
+  }
+  G.coverStart=null; G.coverEnd=null;
   G.drag=null; G.panning=false;
 }
 
@@ -8062,6 +8454,335 @@ function gridPlaceCoverAt(gx,gy){
   save(); renderCombat(); gridDraw();
 }
 
+/* ---- ENCOUNTER PRESETS ---- */
+function gridPresets(){
+  let html='<div style="max-height:60vh;overflow-y:auto;">'+
+    '<div class="hint" style="margin-bottom:8px;">Clears current cover and places a pre-built map layout. Combatant tokens stay.</div>';
+  const presets=[
+    {name:'Parking Lot',desc:'Open lot with rows of cars, good for vehicle encounters',icon:'🅿'},
+    {name:'Office Floor',desc:'Cubicle maze with corner offices and a break room',icon:'🏢'},
+    {name:'Convenience Store',desc:'Tight aisles, front counter, back storage',icon:'🏪'},
+    {name:'Street Shootout',desc:'Two-lane street with cars, dumpsters, and storefronts',icon:'🛣'},
+    {name:'Alleyway',desc:'Narrow alley with dumpsters and side cover',icon:'🌃'},
+    {name:'Warehouse',desc:'Open floor with crate stacks and loading dock',icon:'🏭'}
+  ];
+  presets.forEach((p,i)=>{
+    html+='<button style="display:flex;align-items:center;gap:10px;width:100%;padding:12px 8px;border:none;border-bottom:1px solid var(--line);background:none;color:var(--text);text-align:left;cursor:pointer;font-size:13px;" onclick="gridLoadPreset('+i+')">'+
+      '<span style="font-size:24px;">'+p.icon+'</span>'+
+      '<div><div style="font-weight:700;">'+p.name+'</div><div style="color:var(--muted);font-size:11px;">'+p.desc+'</div></div></button>';
+  });
+  html+='</div>';
+  showModal('Encounter Maps',html);
+}
+
+function gridClearCover(){
+  combatants=combatants.filter(c=>!c.isCover||c.isVehicle);
+  G.floorDeco=[];
+  save(); renderCombat();
+}
+
+function gridFillCover(name,hp,cells){
+  /* find bounding box to create one multi-cell cover if rectangular, else individual */
+  if(cells.length===0) return;
+  const xs=cells.map(c=>c[0]), ys=cells.map(c=>c[1]);
+  const x1=Math.min(...xs), y1=Math.min(...ys), x2=Math.max(...xs), y2=Math.max(...ys);
+  const gw=x2-x1+1, gh=y2-y1+1;
+  const isRect=cells.length===gw*gh;
+  if(isRect){
+    /* one multi-cell cover object */
+    let blocked=false;
+    for(let dy=0;dy<gh&&!blocked;dy++) for(let dx=0;dx<gw&&!blocked;dx++){
+      if(gridTokenAt(x1+dx,y1+dy)) blocked=true;
+    }
+    if(blocked) return;
+    const c={id:uid(),side:'enemy',name:name,hpMax:hp,hp:hp,
+      head:0,body:0,headMax:0,bodyMax:0,init:0,weapons:[],injuries:[],loc:'body',
+      armorMode:'full',ablate:1,note:'',lastHit:'',trackDeath:false,body_stat:5,
+      deathSaves:0,deathResult:'',behindCoverId:null,onFire:false,canDodge:false,dodgeBase:0,
+      cn:0,useCN:false,ncn:0,ncnAuto:true,checkResult:'',
+      isCover:true,gridX:x1,gridY:y1,gridW:gw,gridH:gh};
+    migrateCombatants([c]);
+    combatants.push(c);
+  } else {
+    cells.forEach(([gx,gy])=>{
+      if(gridTokenAt(gx,gy)) return;
+      const c={id:uid(),side:'enemy',name:name,hpMax:hp,hp:hp,
+        head:0,body:0,headMax:0,bodyMax:0,init:0,weapons:[],injuries:[],loc:'body',
+        armorMode:'full',ablate:1,note:'',lastHit:'',trackDeath:false,body_stat:5,
+        deathSaves:0,deathResult:'',behindCoverId:null,onFire:false,canDodge:false,dodgeBase:0,
+        cn:0,useCN:false,ncn:0,ncnAuto:true,checkResult:'',
+        isCover:true,gridX:gx,gridY:gy};
+      migrateCombatants([c]);
+      combatants.push(c);
+    });
+  }
+}
+function gridRect(x,y,w,h){ const r=[]; for(let dy=0;dy<h;dy++) for(let dx=0;dx<w;dx++) r.push([x+dx,y+dy]); return r; }
+function gridLine(x,y,len,vert){ const r=[]; for(let i=0;i<len;i++) r.push(vert?[x,y+i]:[x+i,y]); return r; }
+
+function gridLoadPreset(idx){
+  document.getElementById('tempModal').classList.remove('open');
+  gridClearCover();
+  if(idx===0) presetParkingLot();
+  else if(idx===1) presetOffice();
+  else if(idx===2) presetStore();
+  else if(idx===3) presetStreet();
+  else if(idx===4) presetAlley();
+  else if(idx===5) presetWarehouse();
+  save(); renderCombat(); gridResetView(); gridDraw();
+}
+
+function presetParkingLot(){
+  G.cols=24; G.rows=16;
+  G.floorDeco=[
+    {type:'asphalt',x:0,y:0,w:24,h:16},
+    {type:'parking',x:2,y:2,w:20,h:3},
+    {type:'parking',x:2,y:6,w:20,h:3},
+    {type:'parking',x:2,y:10,w:20,h:3}
+  ];
+  /* rows of cars (steel thin = 25hp each cell) */
+  for(let row=0;row<3;row++){
+    const y=3+row*4;
+    for(let col=0;col<4;col++){
+      const x=3+col*5;
+      gridFillCover('Car'+(row*4+col+1)+' (steel)',25,[[x,y],[x+1,y]]);
+    }
+  }
+  /* concrete barriers at edges */
+  gridFillCover('Barrier (concrete)',10,gridLine(0,0,24,false));
+  gridFillCover('Barrier (concrete)',10,gridLine(0,15,24,false));
+}
+
+function presetOffice(){
+  G.cols=20; G.rows=16; G.floorDeco=[];
+  /* outer walls */
+  gridFillCover('Wall (concrete)',25,gridLine(0,0,20,false));
+  gridFillCover('Wall (concrete)',25,gridLine(0,15,20,false));
+  gridFillCover('Wall (concrete)',25,gridLine(0,0,16,true));
+  gridFillCover('Wall (concrete)',25,gridLine(19,0,16,true));
+  /* cubicle rows */
+  gridFillCover('Cubicle (wood)',5,gridLine(4,3,4,false));
+  gridFillCover('Cubicle (wood)',5,gridLine(4,6,4,false));
+  gridFillCover('Cubicle (wood)',5,gridLine(4,9,4,false));
+  gridFillCover('Cubicle (wood)',5,gridLine(10,3,4,false));
+  gridFillCover('Cubicle (wood)',5,gridLine(10,6,4,false));
+  gridFillCover('Cubicle (wood)',5,gridLine(10,9,4,false));
+  /* corner office walls */
+  gridFillCover('Office wall (wood)',5,gridLine(15,4,5,false));
+  gridFillCover('Office wall (wood)',5,gridLine(15,4,4,true));
+  /* break room counter */
+  gridFillCover('Counter (wood)',5,gridLine(15,11,4,false));
+  /* desk in corner office */
+  gridFillCover('Desk (wood)',5,[[16,2],[17,2]]);
+}
+
+function presetStore(){
+  G.cols=16; G.rows=14; G.floorDeco=[];
+  /* walls */
+  gridFillCover('Wall (concrete)',25,gridLine(0,0,16,false));
+  gridFillCover('Wall (concrete)',25,gridLine(0,13,16,false));
+  gridFillCover('Wall (concrete)',25,gridLine(0,0,14,true));
+  gridFillCover('Wall (concrete)',25,gridLine(15,0,14,true));
+  /* front door gap: remove wall at 7,13 and 8,13 */
+  combatants=combatants.filter(c=>!(c.isCover&&c.gridY===13&&(c.gridX===7||c.gridX===8)));
+  /* front counter */
+  gridFillCover('Counter (wood)',20,gridLine(5,11,6,false));
+  /* aisles */
+  gridFillCover('Shelves (wood)',5,gridLine(3,3,7,true));
+  gridFillCover('Shelves (wood)',5,gridLine(7,3,7,true));
+  gridFillCover('Shelves (wood)',5,gridLine(11,3,7,true));
+  /* back storage */
+  gridFillCover('Crates (wood)',20,gridRect(2,1,3,1));
+  gridFillCover('Crates (wood)',20,gridRect(12,1,3,1));
+}
+
+function presetStreet(){
+  G.cols=26; G.rows=14;
+  /* floor decorations */
+  G.floorDeco=[
+    {type:'sidewalk',x:0,y:2,w:26,h:2},
+    {type:'asphalt',x:0,y:4,w:26,h:6},
+    {type:'lane',x:0,y:6,w:26,h:1},
+    {type:'sidewalk',x:0,y:10,w:26,h:2}
+  ];
+  /* building walls top & bottom */
+  gridFillCover('Building (concrete)',25,gridRect(0,0,26,2));
+  gridFillCover('Building (concrete)',25,gridRect(0,12,26,2));
+  /* sidewalk cover: parked cars */
+  gridFillCover('Parked car (steel)',25,[[3,3],[4,3]]);
+  gridFillCover('Parked car (steel)',25,[[10,3],[11,3]]);
+  gridFillCover('Parked car (steel)',25,[[18,3],[19,3]]);
+  gridFillCover('Parked car (steel)',25,[[5,10],[6,10]]);
+  gridFillCover('Parked car (steel)',25,[[13,10],[14,10]]);
+  gridFillCover('Parked car (steel)',25,[[21,10],[22,10]]);
+  /* dumpster */
+  gridFillCover('Dumpster (steel)',25,[[1,4]]);
+  gridFillCover('Dumpster (steel)',25,[[24,9]]);
+  /* fire hydrant (concrete) */
+  gridFillCover('Hydrant (concrete)',10,[[8,10]]);
+}
+
+function presetAlley(){
+  G.cols=8; G.rows=20;
+  G.floorDeco=[{type:'asphalt',x:1,y:0,w:6,h:20}];
+  /* walls on both sides */
+  gridFillCover('Wall (concrete)',25,gridLine(0,0,20,true));
+  gridFillCover('Wall (concrete)',25,gridLine(7,0,20,true));
+  /* dumpsters */
+  gridFillCover('Dumpster (steel)',25,[[1,4],[2,4]]);
+  gridFillCover('Dumpster (steel)',25,[[5,10],[6,10]]);
+  /* crates */
+  gridFillCover('Crates (wood)',20,[[2,13]]);
+  gridFillCover('Crates (wood)',20,[[5,7]]);
+  /* barrel */
+  gridFillCover('Barrel (steel)',25,[[3,17]]);
+}
+
+function presetWarehouse(){
+  G.cols=22; G.rows=16; G.floorDeco=[];
+  /* outer walls */
+  gridFillCover('Wall (steel)',50,gridLine(0,0,22,false));
+  gridFillCover('Wall (steel)',50,gridLine(0,15,22,false));
+  gridFillCover('Wall (steel)',50,gridLine(0,0,16,true));
+  gridFillCover('Wall (steel)',50,gridLine(21,0,16,true));
+  /* loading dock door gap */
+  combatants=combatants.filter(c=>!(c.isCover&&c.gridX===21&&c.gridY>=6&&c.gridY<=9));
+  /* crate stacks */
+  gridFillCover('Crates (wood)',20,gridRect(3,3,3,2));
+  gridFillCover('Crates (wood)',20,gridRect(3,8,3,2));
+  gridFillCover('Crates (wood)',20,gridRect(3,13,2,1));
+  gridFillCover('Crates (wood)',20,gridRect(10,2,2,3));
+  gridFillCover('Crates (wood)',20,gridRect(10,8,2,4));
+  gridFillCover('Crates (wood)',20,gridRect(16,3,2,2));
+  gridFillCover('Crates (wood)',20,gridRect(16,10,2,3));
+  /* forklift */
+  gridFillCover('Forklift (steel)',25,[[14,6],[14,7]]);
+  /* office partition */
+  gridFillCover('Office wall (wood)',5,gridLine(8,0,3,true));
+}
+
+function gridUpdateHUD(){
+  const label=document.getElementById('gridTurnLabel');
+  if(!label) return;
+  const ac=activeId?find(activeId):null;
+  if(ac){
+    const pct=ac.hpMax>0?Math.round(ac.hp/ac.hpMax*100):100;
+    label.innerHTML='<span style="color:'+(ac.side==='enemy'?'var(--red)':'var(--cyan)')+';">▶ '+esc(ac.name)+'</span>'+
+      ' <span style="color:var(--muted);">HP '+ac.hp+'/'+ac.hpMax+' ('+pct+'%)</span>';
+  } else {
+    label.textContent='No active turn';
+  }
+  /* show remove button when a token is selected */
+  const rb=document.getElementById('gridRemBtn');
+  if(rb) rb.style.display=G.sel?'':'none';
+}
+
+function gridRemoveSelected(){
+  if(!G.sel) return;
+  const t=find(G.sel);
+  if(!t){ G.sel=null; gridDraw(); return; }
+  const idx=combatants.indexOf(t);
+  if(idx>=0) combatants.splice(idx,1);
+  /* clean up cover refs */
+  combatants.forEach(c=>{ if(c.behindCoverId===G.sel) c.behindCoverId=null; });
+  if(activeId===G.sel) activeId=null;
+  G.sel=null;
+  save(); renderCombat(); gridDraw();
+  toast(t.name+' removed');
+}
+
+function gridNextTurn(){
+  nextTurn(); /* use existing turn advancement with all upkeep */
+  gridDraw();
+}
+
+function gridShoot(){
+  const sel=G.sel?find(G.sel):null;
+  const ac=activeId?find(activeId):null;
+  const shooter=sel||ac;
+  if(!shooter||shooter.isCover){
+    toast('Select a combatant first'); return;
+  }
+  openShoot(shooter.id);
+}
+
+/* ---- AUTO-COVER: assign behindCoverId when adjacent to cover ---- */
+function gridAutoAssignCover(){
+  combatants.forEach(t=>{
+    if(t.isCover||t.gridX==null) return;
+    if(t.hp<=0) return;
+    /* find adjacent cover */
+    let bestCover=null, bestDist=999;
+    combatants.forEach(cv=>{
+      if(!cv.isCover||cv.hp<=0) return;
+      const cw=cv.gridW||1, ch=cv.gridH||1;
+      /* check if t is adjacent (within 1 cell of cover's bounding box) */
+      const adjX=t.gridX>=cv.gridX-1&&t.gridX<=cv.gridX+cw;
+      const adjY=t.gridY>=cv.gridY-1&&t.gridY<=cv.gridY+ch;
+      if(adjX&&adjY){
+        /* not ON the cover */
+        const onX=t.gridX>=cv.gridX&&t.gridX<cv.gridX+cw;
+        const onY=t.gridY>=cv.gridY&&t.gridY<cv.gridY+ch;
+        if(!(onX&&onY)){
+          const dx=Math.abs(t.gridX-(cv.gridX+cw/2));
+          const dy=Math.abs(t.gridY-(cv.gridY+ch/2));
+          const d=dx+dy;
+          if(d<bestDist){ bestDist=d; bestCover=cv; }
+        }
+      }
+    });
+    t.behindCoverId=bestCover?bestCover.id:null;
+  });
+}
+
+function gridCleanMenu(){
+  const deadEn=combatants.filter(c=>c.side==='enemy'&&!c.isCover&&c.hp<=0).length;
+  const allEn=combatants.filter(c=>c.side==='enemy'&&!c.isCover).length;
+  const coverN=combatants.filter(c=>c.isCover&&!c.isVehicle).length;
+  const allies=combatants.filter(c=>c.side!=='enemy'&&!c.isCover).length;
+  let html='<div style="display:flex;flex-direction:column;gap:6px;">';
+  html+='<button class="btn ghost wide" style="text-align:left;padding:12px;" onclick="gridCleanDo(\'deadEnemies\')">'+
+    '💀 Clear dead enemies <span style="color:var(--muted);float:right;">'+deadEn+'</span></button>';
+  html+='<button class="btn ghost wide" style="text-align:left;padding:12px;" onclick="gridCleanDo(\'allEnemies\')">'+
+    '👥 Clear all enemies <span style="color:var(--muted);float:right;">'+allEn+'</span></button>';
+  html+='<button class="btn ghost wide" style="text-align:left;padding:12px;" onclick="gridCleanDo(\'cover\')">'+
+    '▨ Clear all cover <span style="color:var(--muted);float:right;">'+coverN+'</span></button>';
+  html+='<button class="btn ghost wide" style="text-align:left;padding:12px;" onclick="gridCleanDo(\'postCombat\')">'+
+    '✓ Post-combat cleanup<br><span style="color:var(--muted);font-size:11px;">Removes dead enemies + all cover, keeps allies</span></button>';
+  html+='<button class="btn ghost wide" style="text-align:left;padding:12px;color:var(--red);" onclick="gridCleanDo(\'everything\')">'+
+    '⚠ Clear everything<br><span style="color:var(--muted);font-size:11px;">Removes all combatants, cover, and grid positions</span></button>';
+  html+='</div>';
+  showModal('🧹 Clear Map',html);
+}
+
+function gridCleanDo(mode){
+  document.getElementById('tempModal').classList.remove('open');
+  let removed=0;
+  const before=combatants.length;
+  if(mode==='deadEnemies'){
+    combatants=combatants.filter(c=>!(c.side==='enemy'&&!c.isCover&&c.hp<=0));
+  } else if(mode==='allEnemies'){
+    combatants=combatants.filter(c=>!(c.side==='enemy'&&!c.isCover));
+  } else if(mode==='cover'){
+    combatants=combatants.filter(c=>!c.isCover||c.isVehicle);
+  } else if(mode==='postCombat'){
+    combatants=combatants.filter(c=>{
+      if(c.isCover&&!c.isVehicle) return false;
+      if(c.side==='enemy'&&!c.isCover&&c.hp<=0) return false;
+      return true;
+    });
+  } else if(mode==='everything'){
+    combatants=[];
+    activeId=null;
+  }
+  removed=before-combatants.length;
+  /* clear orphaned behindCoverId refs */
+  const ids=new Set(combatants.map(c=>c.id));
+  combatants.forEach(c=>{ if(c.behindCoverId&&!ids.has(c.behindCoverId)) c.behindCoverId=null; });
+  save(); renderCombat(); gridDraw();
+  toast('Cleared '+removed+' item'+(removed!==1?'s':''));
+}
+
 /* ============ INIT ============ */
 setSide('enemy');
 document.getElementById('sortLabel').textContent='SORT: '+(sortMode==='init'?'INIT':'ADDED');
@@ -8073,13 +8794,23 @@ renderTimeline(); renderCombat(); renderNotes(); renderLog(); renderRoster(); re
     <div class="grid-tools">
       <button class="grid-btn" id="gridMeasBtn" onclick="gridToggleMeasure()" title="Measure">📏</button>
       <button class="grid-btn" onclick="gridAddCover()" title="Add cover">▨</button>
+      <button class="grid-btn" onclick="gridPresets()" title="Encounter maps">🗺</button>
+      <button class="grid-btn" onclick="gridCleanMenu()" title="Clear map">🧹</button>
       <button class="grid-btn" onclick="gridResetView()" title="Reset view">⟲</button>
       <button class="grid-btn" onclick="gridResize()" title="Grid size">⊞</button>
       <button class="grid-btn" onclick="closeGrid()">✕</button>
     </div>
   </div>
   <canvas id="gridCanvas"></canvas>
-  <div class="grid-ftr"><span id="gridInfo">Tap token to select · Drag to move</span></div>
+  <div class="grid-ftr">
+    <div id="gridHUD" style="display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap;">
+      <span id="gridTurnLabel" style="flex:1;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+      <button class="grid-btn" style="width:auto;padding:0 10px;font-size:12px;" onclick="gridNextTurn()">NEXT ▶</button>
+      <button class="grid-btn" style="width:auto;padding:0 10px;font-size:12px;" onclick="gridShoot()">⚅ SHOOT</button>
+      <button class="grid-btn" id="gridRemBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;color:var(--red);" onclick="gridRemoveSelected()">✕ REMOVE</button>
+    </div>
+    <div id="gridInfo" style="font-size:10px;color:var(--muted);margin-top:3px;">Tap token to select · Drag to move</div>
+  </div>
 </div>
 </body>
 </html>
