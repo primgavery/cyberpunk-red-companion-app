@@ -2100,13 +2100,15 @@ let shoot=null;
 function currentWeapon(){ const s=find(shoot.shooterId);
   if(shoot._allWeapons && shoot.wi < shoot._allWeapons.length) return shoot._allWeapons[shoot.wi];
   return s.weapons[shoot.wi]; }
-function openShoot(id){ const s=find(id); if(!s)return;
-  shoot={shooterId:id,wi:0,targetId:null,range:'',mod:0,loc:'body',armorMode:'full',ablate:1,ignoreBelow:null,
+function openShoot(id,opts){ const s=find(id); if(!s)return;
+  opts=opts||{};
+  shoot={shooterId:id,wi:opts.wi||0,targetId:null,range:'',mod:0,loc:'body',armorMode:'full',ablate:1,ignoreBelow:null,
     dv:null,hit:null,aimedHead:false,aimType:'normal',shotsUsed:0,fireMode:'single',margin:0,targetIds:[],suppressDV:null,multiIds:[],smartUsed:false,
-    defence:'dv',dodgedIds:[],blastAtk:null};
+    defence:'dv',dodgedIds:[],blastAtk:null,
+    _fromMap:!!opts.fromMap,_prefFireMode:opts.fireMode||null,_prefMulti:opts.multiIds||null,_prefRange:(opts.range!=null?opts.range:null),_blastCenter:opts.blastCenter||null};
   document.getElementById('shootTitle').textContent='ATTACK — '+s.name;
   const body=document.getElementById('shootBody');
-  if(!s.weapons.length){
+  if(!s.weapons.length && !(typeof shootWeaponList==='function' && shootWeaponList(s).length)){
     body.innerHTML='<div class="col-empty">No weapon equipped.<br>Close this, tap the ▼ arrow on '+esc(s.name)+', and add a weapon to the inventory.</div>'+
       '<button class="btn ghost wide" style="margin-top:12px;" onclick="closeShoot();toggleExpand(\''+id+'\')">OPEN INVENTORY</button>';
     document.getElementById('shootModal').classList.add('open'); return;
@@ -2140,6 +2142,7 @@ function openShoot(id){ const s=find(id); if(!s)return;
     '<div class="shoot-sec"><label class="sl">WEAPON</label><select id="shootWeapon" onchange="onWeaponChange()">'+wOpts+'</select></div>'+
     '<div class="shoot-sec"><label class="sl">TARGET</label><div id="shootTargets" class="target-list">'+tRows+'</div></div>'+
     '<div class="shoot-sec" id="fireModeSec"></div>'+
+    '<div class="shoot-sec" id="areaAssistSec"></div>'+
     '<div class="shoot-sec" id="aimSec"><label class="sl">SHOT TYPE</label><div class="seg" style="flex-wrap:wrap;">'+
       '<button id="aimNormal" class="fsel" onclick="setAimType(\'normal\')">Normal (Body)</button>'+
       '<button id="aimHead" onclick="setAimType(\'head\')">Head −8</button>'+
@@ -2157,7 +2160,42 @@ function openShoot(id){ const s=find(id); if(!s)return;
     '<div class="shot-count" id="rofLine"></div>'+
     '<button class="btn wide" id="rollAtkBtn" onclick="rollAttack()">⚅ ROLL ATTACK</button>'+
     '<div id="shootResult"></div><div id="shootDmg" class="hidden"></div>';
-  onWeaponChange(); document.getElementById('shootModal').classList.add('open'); }
+  const wsel=document.getElementById('shootWeapon'); if(wsel) wsel.value=String(shoot.wi);
+  onWeaponChange();
+  applyMapPrefill();
+  document.getElementById('shootModal').classList.add('open'); }
+/* when the attack was aimed on the battle map, lock in the square's targets + range */
+function applyMapPrefill(){
+  const s=find(shoot.shooterId); if(!s) return;
+  if(shoot._prefFireMode){
+    setFireMode(shoot._prefFireMode);
+    if(shoot._prefMulti){
+      shoot.multiIds=shoot._prefMulti.slice();
+      shoot.targetIds=[...new Set(shoot.targetIds.concat(shoot.multiIds))]; /* show allies/cover caught too */
+    }
+    if(shoot._prefRange!=null){ shoot.range=String(shoot._prefRange);
+      const inp=document.getElementById('shootRange'); if(inp) inp.value=shoot._prefRange; }
+    updateShootDV(); refreshTargets();
+    /* range is fixed by the map — hide the band picker + range box */
+    const bs=document.getElementById('bandSec'); if(bs){ bs.innerHTML=''; bs.style.display='none'; }
+    const rr=document.querySelector('#shootBody .rangerow'); if(rr) rr.style.display='none';
+    const aa=document.getElementById('areaAssistSec');
+    if(aa){
+      const {chars,covers}=(function(){ const cs=shoot.multiIds.map(find).filter(Boolean);
+        return {chars:cs.filter(c=>!c.isCover),covers:cs.filter(c=>c.isCover)}; })();
+      aa.style.display='';
+      aa.innerHTML='<label class="sl">◎ TARGET SQUARE — LOCKED FROM MAP</label>'+
+        '<div class="shot-count">'+chars.length+' in the blast'+(covers.length?' · '+covers.length+' cover':'')+
+        ' · centre '+ (shoot._prefRange!=null?shoot._prefRange+' m away':'') +
+        '<br>'+chars.map(c=>esc(c.name)).join(', ')+'</div>'+
+        '<button class="fsel" style="margin-top:4px;" onclick="closeShoot();gridShoot();">↺ re-aim on map</button>';
+    }
+  } else if(shoot._fromMap){
+    /* single-shot from the map — range is known, so drop the band picker & range box */
+    const rr=document.querySelector('#shootBody .rangerow'); const bs=document.getElementById('bandSec');
+    if(bs){ bs.innerHTML=''; bs.style.display='none'; }
+  }
+}
 function isMultiMode(){ return shoot.fireMode==='shell'||shoot.fireMode==='blast'; }
 /* one source for the SP readout — used on collapsed cards and in the shoot target list.
    full = cyan, ablated = amber, gone = red */
@@ -2207,7 +2245,7 @@ function renderFireModes(){ const w=currentWeapon(); const sec=document.getEleme
   sec.innerHTML='<label class="sl">FIRE MODE</label><div class="seg">'+btns+'</div>'; }
 function setFireMode(m){ const w=currentWeapon(); shoot.fireMode=m; shoot.shotsUsed=0; shoot.multiIds=[];
   shoot.defence='dv'; shoot.dodgedIds=[]; shoot.dodgeResults={};
-  renderFireModes(); refreshTargets();
+  renderFireModes(); refreshTargets(); renderAreaAssist();
   syncAimVisibility();
   const dw=document.getElementById('shootDmg'); dw.classList.add('hidden'); dw.innerHTML='';
   document.getElementById('shootResult').innerHTML='';
@@ -2217,6 +2255,78 @@ function setFireMode(m){ const w=currentWeapon(); shoot.fireMode=m; shoot.shotsU
   if(tl) tl.style.opacity=(m==='suppress')?'.4':'';
   applyRangeVisibility(); renderBands(); renderDefence();
   refreshRofLine(); onRangeInput(); }
+
+/* ---- BATTLE-MAP AREA ASSIST: fill blast / cone / suppression from token positions ---- */
+function renderAreaAssist(){
+  const sec=document.getElementById('areaAssistSec'); if(!sec) return;
+  if(shoot._prefFireMode){ return; }   /* square already locked in from the map */
+  const s=find(shoot.shooterId); const fm=shoot.fireMode;
+  if(!s||s.gridX==null||(fm!=='blast'&&fm!=='shell'&&fm!=='suppress')){ sec.innerHTML=''; sec.style.display='none'; return; }
+  sec.style.display='';
+  const placed=combatants.filter(c=>c.gridX!=null&&c.hp>0);
+  const foes=placed.filter(c=>!c.isCover&&c.side!==s.side);
+  const opt=c=>'<option value="'+c.id+'">'+esc(c.name)+' · '+(combatGridDist(s,c))+'m</option>';
+  if(fm==='blast'){
+    const cands=placed.filter(c=>!c.isCover);
+    if(!cands.length){ sec.innerHTML=''; return; }
+    sec.innerHTML='<label class="sl">◎ BATTLE MAP — 10 m × 10 m BLAST</label>'+
+      '<div class="seg" style="gap:6px;"><select id="areaCtr" style="flex:1;padding:6px;font-size:12px;">'+
+        cands.map(opt).join('')+'</select>'+
+      '<button class="fsel" onclick="fillAreaFromMap(\'blast\')">⊹ FILL</button></div>'+
+      '<div class="shot-count">Ticks every token — and any cover — inside the 5×5 square centred on that target.</div>';
+  } else if(fm==='shell'){
+    if(!foes.length){ sec.innerHTML=''; return; }
+    sec.innerHTML='<label class="sl">◎ BATTLE MAP — 6 m CONE (3 squares)</label>'+
+      '<div class="seg" style="gap:6px;"><select id="areaCtr" style="flex:1;padding:6px;font-size:12px;">'+
+        foes.map(opt).join('')+'</select>'+
+      '<button class="fsel" onclick="fillAreaFromMap(\'shell\')">⊹ FILL</button></div>'+
+      '<div class="shot-count">You face that target — ticks every visible enemy within 3 squares in front of you.</div>';
+  } else {
+    const inRange=foes.filter(c=>combatGridDist(s,c)<=25);
+    const exposed=inRange.filter(c=>!gridInCover(c)&&gridLOS(s,c));
+    sec.innerHTML='<label class="sl">◎ BATTLE MAP — SUPPRESSION (25 m)</label>'+
+      '<div class="shot-count">'+inRange.length+' enem'+(inRange.length===1?'y':'ies')+' within 25 m — '+
+        exposed.length+' exposed & in sight'+(inRange.length-exposed.length>0?', '+(inRange.length-exposed.length)+' already covered/blocked':'')+
+        '.<br>Roll the suppression total first, then use “roll every exposed enemy”.</div>';
+  }
+}
+function fillAreaFromMap(mode){
+  const s=find(shoot.shooterId); if(!s||s.gridX==null) return;
+  const ctr=find((document.getElementById('areaCtr')||{}).value); if(!ctr||ctr.gridX==null) return;
+  let ids=[];
+  if(mode==='blast'){
+    const cx=ctr.gridX+((ctr.gridW||1)-1)/2, cy=ctr.gridY+((ctr.gridH||1)-1)/2;
+    shoot._blastCenter={x:Math.round(cx),y:Math.round(cy)};
+    combatants.forEach(c=>{
+      if(c.gridX==null) return;
+      if(!c.isCover&&c.hp<=0) return;
+      const w=c.gridW||1, h=c.gridH||1;
+      /* any part of the token within ±2 squares of the centre cell */
+      const near=(c.gridX+w-1)>=cx-2 && c.gridX<=cx+2 && (c.gridY+h-1)>=cy-2 && c.gridY<=cy+2;
+      if(near) ids.push(c.id);
+    });
+  } else { /* shell cone: within 3 squares, inside a 90° arc toward ctr, with LOS */
+    shoot._blastCenter=null;
+    const vx=ctr.gridX-s.gridX, vy=ctr.gridY-s.gridY;
+    const vlen=Math.hypot(vx,vy)||1;
+    combatants.forEach(c=>{
+      if(c.isCover||c.gridX==null||c.hp<=0||c.id===s.id) return;
+      if(c.side===s.side) return;
+      const wx=c.gridX-s.gridX, wy=c.gridY-s.gridY;
+      const wlen=Math.hypot(wx,wy);
+      if(wlen>3) return;                                   /* 3 squares = 6 m */
+      if(wlen>0){ const dot=(vx*wx+vy*wy)/(vlen*wlen); if(dot<0.5) return; }  /* ~60° half-arc */
+      if(!gridLOS(s,c)) return;
+      ids.push(c.id);
+    });
+    if(ids.indexOf(ctr.id)<0) ids.push(ctr.id);
+  }
+  shoot.multiIds=ids;
+  refreshTargets();
+  const n=ids.filter(id=>{const t=find(id);return t&&!t.isCover;}).length;
+  const nc=ids.length-n;
+  document.getElementById('shootResult').innerHTML='<div class="shot-count" style="color:var(--cyan);">◎ Filled from map — '+n+' combatant'+(n===1?'':'s')+(nc?' + '+nc+' cover':'')+' in the area.</div>';
+}
 /* ---- RANGE BANDS ----
    The DV only ever depends on which band the range falls in — computeDV() throws the
    exact metres away. So for any weapon with a range table we show the bands as chips and
@@ -2237,11 +2347,16 @@ function bandListFor(w){
   for(let i=0;i<bands.length;i++){ if(dvs[i]!=='N/A') out.push({l:bands[i].l,max:bands[i].max,dv:dvs[i]}); }
   return out.length?out:null; }
 function bandsShown(){ const w=currentWeapon(); const t=shoot.targetId?find(shoot.targetId):null;
+  if(shoot._prefFireMode||gridRangeKnown()) return false;
   return !!(bandListFor(w) && !autoHits(w,t)); }
+function gridRangeKnown(){
+  const s=find(shoot.shooterId); const t=shoot.targetId?find(shoot.targetId):null;
+  return !!(shoot._fromMap && s && s.gridX!=null && t && t.gridX!=null);
+}
 function renderBands(){ const sec=document.getElementById('bandSec'); if(!sec) return;
   const w=currentWeapon(); const t=shoot.targetId?find(shoot.targetId):null;
   const list=bandListFor(w);
-  if(!list || autoHits(w,t)){ sec.innerHTML=''; sec.style.display='none'; return; }
+  if(!list || autoHits(w,t) || shoot._prefFireMode || gridRangeKnown()){ sec.innerHTML=''; sec.style.display='none'; return; }
   sec.style.display='';
   let cur=parseInt(shoot.range);
   /* a firefight tends to stay at one distance — reoffer the last band if it fits this table */
@@ -2257,9 +2372,10 @@ function pickBand(max){ const inp=document.getElementById('shootRange'); if(inp)
 function applyRangeVisibility(){ const rr=document.querySelector('#shootBody .rangerow'); if(!rr) return;
   const w=currentWeapon(); const t=shoot.targetId?find(shoot.targetId):null;
   const chips=bandsShown();
-  const noRange=(shoot.fireMode==='shell')||autoHits(w,t)||chips||(w&&w.melee);   /* melee: opposed roll, nothing to type */
+  const known=gridRangeKnown()||!!shoot._prefFireMode;
+  const noRange=(shoot.fireMode==='shell')||autoHits(w,t)||chips||known||(w&&w.melee);
   rr.querySelector('.field').style.display=noRange?'none':'';   /* hide only the range box, keep the mod box */
-  rr.classList.toggle('mod-only',chips); }
+  rr.classList.toggle('mod-only',chips||known); }
 /* melee against something that cannot dodge simply connects */
 function autoHits(w,t){ return !!(w&&t&&w.melee&&t.isCover); }
 /* Ranged attacks can only be dodged at REF 8+. Melee is always opposed by Evasion. */
@@ -2307,7 +2423,7 @@ function selectTarget(id){
   if(isMultiMode()){ const i=shoot.multiIds.indexOf(id);
     if(i>=0) shoot.multiIds.splice(i,1); else shoot.multiIds.push(id);
     refreshTargets(); return; }
-  shoot.targetId=id;
+  shoot.targetId=id; shoot._meleeOverride=0;
   document.querySelectorAll('#shootTargets .target-row').forEach(el=>el.classList.toggle('sel',el.getAttribute('data-t')===id));
   const t=find(id);
   const aimBtns=['aimHead','aimHeld','aimLeg'];
@@ -2336,7 +2452,7 @@ function onWeaponChange(){ shoot.wi=parseInt(document.getElementById('shootWeapo
   const am0=ammoOf(w); shoot.ablate=(w.melee?1:(am0.ablate||1));
   shoot.shotsUsed=0;
   document.getElementById('rangeLabel').textContent=w.rangeRow?'RANGE (m)':'DV (manual)';
-  shoot.fireMode=(w.areaMode==='blast')?'blast':'single'; shoot.multiIds=[]; renderFireModes(); refreshTargets();
+  shoot.fireMode=(w.areaMode==='blast')?'blast':'single'; shoot.multiIds=[]; shoot._meleeOverride=0; renderFireModes(); refreshTargets(); renderAreaAssist();
   syncAimVisibility();
   const btn=document.getElementById('rollAtkBtn'); if(btn) btn.textContent='⚅ ROLL ATTACK';
   const tl=document.getElementById('shootTargets'); if(tl) tl.style.opacity='';
@@ -2377,7 +2493,7 @@ function damageContextHtml(w){
   if(!w.melee){ const cur=w.ammoType||'basic'; const a=AMMO[cur]||AMMO.basic;
     parts.push(a.label+(a.note?' — '+a.note:'')); }
   return '<div class="dmg-context">▸ '+esc(parts.join(' · '))+'</div>'; }
-function nextShot(){ shoot.smartUsed=false; shoot.dodgedIds=[]; shoot.dodgeResults={}; shoot.blastAtk=null;
+function nextShot(){ shoot.smartUsed=false; shoot.dodgedIds=[]; shoot.dodgeResults={}; shoot.blastAtk=null; shoot._meleeOverride=0;
   const dw=document.getElementById('shootDmg'); dw.classList.add('hidden'); dw.innerHTML='';
   document.getElementById('shootResult').innerHTML=''; refreshTargets(); refreshRofLine(); }
 function onRangeInput(){ shoot.range=document.getElementById('shootRange').value; updateShootDV(); }
@@ -2406,7 +2522,7 @@ function updateShootDV(){ const w=currentWeapon(); const el=document.getElementB
   else if(r.neg){shoot.dv=null;el.textContent='Range cannot be negative';el.className='dv-display bad';}
   else if(r.out){shoot.dv=null;el.textContent='OUT OF RANGE (>'+r.max+' m)';el.className='dv-display bad';}
   else if(r.na){shoot.dv=null;el.textContent='N/A — can\'t reach the '+r.band+' m band';el.className='dv-display bad';}
-  else {shoot.dv=r.dv;el.innerHTML='DV <b>'+r.dv+'</b> · '+r.band+' m band'+(auto?' · autofire table':'');el.className='dv-display ok';}
+  else {shoot.dv=r.dv;el.innerHTML='DV <b>'+r.dv+'</b> · '+r.band+' m band'+(auto?' · autofire table':'')+(gridRangeKnown()?' · <span style="color:var(--cyan);">'+shoot.range+' m measured on map</span>':'');el.className='dv-display ok';}
   renderDefence(); }
 function rollAttack(){ const w=currentWeapon(); const s=find(shoot.shooterId); const res=document.getElementById('shootResult');
   const fm=shoot.fireMode;
@@ -2416,6 +2532,15 @@ function rollAttack(){ const w=currentWeapon(); const s=find(shoot.shooterId); c
   if(fm!=='suppress' && shoot.dv==null){ res.innerHTML='<div class="warn">Set a valid range / DV first.</div>'; return; }
   if(w.reloading>0){ res.innerHTML='<div class="warn">'+esc(w.name)+' is still being reloaded — '+w.reloading+' more Action'+(w.reloading===1?'':'s')+'.</div>'; return; }
   if(w.jammed){ res.innerHTML='<div class="warn">'+esc(w.name)+' is jammed! Use 🔧 UNJAM in inventory (costs an Action).</div>'; return; }
+  /* melee only reaches an adjacent square on the battle map */
+  if(w.melee && !isMultiMode() && fm!=='suppress' && !shoot._meleeOverride){
+    const t0=shoot.targetId?find(shoot.targetId):null;
+    if(t0 && s.gridX!=null && t0.gridX!=null && !gridAdjacent(s,t0)){
+      res.innerHTML='<div class="warn">'+esc(t0.name)+' is '+(combatGridDist(s,t0))+' m away — melee only reaches an adjacent square. '+
+        'Move '+esc(s.name)+' next to them, or <a href="#" onclick="shoot._meleeOverride=1;rollAttack();return false;" style="color:var(--cyan);">strike anyway</a>.</div>';
+      return;
+    }
+  }
   const cost=(fm==='auto'||fm==='suppress')?10:1;
   if(w.mag!=null){ if(w.ammo<cost){ res.innerHTML='<div class="warn">'+(cost>1
       ? esc(w.name)+' needs 10 rounds in the clip — only '+w.ammo+' left.'
@@ -2588,13 +2713,14 @@ function rollApplyDamage(){ const w=currentWeapon(); const t=find(shoot.targetId
   refreshTargets();                                /* keep the target list HP live */
   save(); renderCombat(); }
 
-/* Anyone with REF 8+ may individually dodge a blast by rolling higher than the attack. */
+/* Anyone with REF 8+ may individually dodge a blast (or a shotgun shell) by rolling over the attack. */
 function blastDodgeHtml(){
-  if(shoot.fireMode!=='blast') return '';
+  if(shoot.fireMode!=='blast'&&shoot.fireMode!=='shell') return '';
   const elig=shoot.multiIds.map(find).filter(t=>t&&!t.isCover&&t.canDodge&&t.hp>0);
   if(!elig.length) return '';
+  const what=shoot.fireMode==='shell'?'THE SHELL':'THE BLAST';
   return '<div class="death-box" style="border-color:var(--cyan-dim);background:rgba(45,226,230,.05);">'+
-    '<div class="dl" style="color:var(--cyan);">REF 8+ MAY DODGE THE BLAST — must roll over '+shoot.blastAtk+'</div>'+
+    '<div class="dl" style="color:var(--cyan);">REF 8+ MAY DODGE '+what+' — must roll over '+shoot.blastAtk+'</div>'+
     '<div id="blastDodgeList">'+blastDodgeRows()+'</div></div>'; }
 function blastDodgeRows(){
   return shoot.multiIds.map(find).filter(t=>t&&!t.isCover&&t.canDodge&&t.hp>0).map(t=>{
@@ -2625,22 +2751,35 @@ function rollApplyArea(){ const w=currentWeapon();
   const roll=rollDiceStr(dice); const total=roll.sum+dmgBonus+spotApply;
   const bonusStr=(dmgBonus||spotApply)?(' +'+(dmgBonus+spotApply)+' bonus'):'';
   const isCrit=roll.rolls.filter(r=>r===6).length>=2;
-  /* RAW: blasts ignore cover entirely; shotgun shells still respect cover */
+  /* RAW: an explosive blast won't hurt someone behind cover it can't destroy — but if the
+     blast destroys the cover, they're fully exposed. Shotgun shells respect cover the same way. */
   const am=ammoOf(w);
   if(am.check) return showAmmoCheck(w,am,shoot.multiIds.map(find).filter(Boolean));
   const caught=shoot.multiIds.filter(id=>shoot.dodgedIds.indexOf(id)<0);
-  const lines=applyAreaDamage(caught,total,shoot.armorMode,shoot.ablate,shoot.ignoreBelow,shell,
+  /* blast: only shield a target if their cover actually sits between them and the blast centre */
+  const restoreCover=[];
+  if(shoot.fireMode==='blast' && shoot._blastCenter){
+    caught.forEach(id=>{ const t=find(id);
+      if(!t||t.isCover||!t.behindCoverId) return;
+      const cv=find(t.behindCoverId);
+      if(cv && cv.isCover && !gridCoverBetween(cv,shoot._blastCenter,t)){
+        restoreCover.push([t,t.behindCoverId]); t.behindCoverId=null;
+      }
+    });
+  }
+  const lines=applyAreaDamage(caught,total,shoot.armorMode,shoot.ablate,shoot.ignoreBelow,true,
     {noAblate:am.noAblate,nonLethal:am.nonLethal,ignite:am.ignite,attacker:(find(shoot.shooterId)||{}).name||''});
   shoot.dodgedIds.forEach(id=>{ const t=find(id); if(t) lines.unshift({name:t.name,msg:'dodged clear of the blast — no damage',shielded:true}); });
   if(am.noCrit) isCrit=false;
   let critLine='';
   if(isCrit){ const hurt=[];
     caught.forEach(id=>{ const t=find(id); if(!t||t.isCover) return;
-      const cv=(shell&&t.behindCoverId)?find(t.behindCoverId):null;
-      if(cv && cv.hp>0) return;                      /* still shielded, no crit */
+      const cv=t.behindCoverId?find(t.behindCoverId):null;
+      if(cv && cv.isCover && cv.hp>0) return;        /* cover survived — no damage, no crit */
       t.hp=Math.max(0,t.hp-5); const inj=rollCritInjury(t,'body'); hurt.push(esc(t.name)+' — '+esc(inj));
       logEvent('☠ '+t.name+' takes a Critical Injury — '+inj+' · +5 bonus damage, now '+t.hp+' HP','crit'); });
     if(hurt.length) critLine='<div class="crit-hit">☠ CRITICAL INJURY (two 6s) · +5 bonus damage each<br>'+hurt.join('<br>')+'</div>'; }
+  restoreCover.forEach(([t,cid])=>{ if(!t.behindCoverId) t.behindCoverId=cid; });
   document.getElementById('shootDmg').innerHTML=
     '<div class="dmg-result">'+dice+' ['+roll.rolls.join(', ')+']'+bonusStr+' = <b>'+total+'</b> to every target</div>'+
     areaLogHtml(lines)+critLine+
@@ -2673,30 +2812,66 @@ function rollSuppression(w,s,res){
   res.innerHTML='<div class="atk-line">REF + Autofire + 1d10 ['+atk.chain.join(' → ')+']'+modstr+' = <b>'+atk.total+'</b>'+critTag+'</div>'+
     '<div class="verdict hit">SUPPRESSION '+atk.total+(w.mag!=null?' · ammo '+w.ammo+'/'+w.mag+' (−10)':'')+'</div>';
   /* build defender picker from combatants on the other side */
-  const defenders=combatants.filter(c=>c.side!==s.side&&!c.isCover&&c.hp>0);
+  const supWill=d=>{
+    if(d.skills&&d.charStats) return {v:(d.charStats.will||0)+getSkillLevel(d.skills,'concentration')+getSkillMisc(d,'concentration'),l:'WILL+Conc'};
+    return {v:d.ncn||0,l:'NCN'};
+  };
+  const onMap=s.gridX!=null;
+  const defenders=combatants.filter(c=>{
+    if(c.side===s.side||c.isCover||c.hp<=0) return false;
+    if(onMap&&c.gridX!=null){ shoot._supStatus=shoot._supStatus||{};
+      const dist=combatGridDist(s,c);
+      const covered=gridInCover(c), los=gridLOS(s,c);
+      shoot._supStatus[c.id]={dist,covered,los,affected:dist<=25&&!covered&&los};
+    }
+    return true;
+  });
+  const st=id=>(shoot._supStatus||{})[id];
   let defPicker='<span class="ign-field">WILL+Conc <input id="supDef" type="number" inputmode="numeric" placeholder="0"></span>';
   if(defenders.length){
     defPicker='<select id="supDefTarget" onchange="supAutoFill()" style="flex:1;padding:6px;font-size:12px;">'+
       '<option value="">Manual entry…</option>'+
       defenders.map(d=>{
-        let base=0; let label='NCN '+(d.ncn||0);
-        if(d.skills&&d.charStats){
-          base=(d.charStats.will||0)+getSkillLevel(d.skills,'concentration')+getSkillMisc(d,'concentration');
-          label='WILL+Conc '+base;
-        } else { base=d.ncn||0; }
-        return '<option value="'+base+'">'+esc(d.name)+' — '+label+'</option>';
+        const sw=supWill(d); const s2=st(d.id);
+        const tag=s2?(' · '+s2.dist+'m'+(s2.affected?'':(s2.dist>25?' (out of range)':s2.covered?' (in cover)':' (no LOS)'))):'';
+        return '<option value="'+sw.v+'">'+esc(d.name)+' — '+sw.l+' '+sw.v+tag+'</option>';
       }).join('')+'</select>'+
       '<input id="supDef" type="number" inputmode="numeric" placeholder="0" style="width:50px;">';
   }
+  const affected=onMap?defenders.filter(d=>st(d.id)&&st(d.id).affected):[];
+  const allBtn=affected.length?'<button class="btn ghost wide" style="margin-top:6px;" onclick="suppressResolveAll()">⚅ ROLL ALL '+affected.length+' EXPOSED ENEM'+(affected.length===1?'Y':'IES')+' IN RANGE</button>':'';
   const dw=document.getElementById('shootDmg'); dw.classList.remove('hidden');
   dw.innerHTML='<div class="death-box" style="border-color:var(--cyan-dim);background:rgba(45,226,230,.05);">'+
     '<div class="dl" style="color:var(--cyan);">EVERYONE ON FOOT WITHIN 25 M, OUT OF COVER, IN LINE OF SIGHT<br>'+
     'must beat '+atk.total+' with WILL + Concentration + 1d10 — or spend their next Move getting to cover</div>'+
     '<div class="death-row">'+defPicker+
     '<button onclick="rollSuppressDefender()">⚅ ROLL DEFENDER</button></div>'+
+    allBtn+
     '<div id="supLog"></div></div>'+
     '<button class="btn ghost wide" style="margin-top:8px;" onclick="closeShoot()">DONE</button>';
   save(); renderCombat(); }
+function suppressResolveAll(){
+  const s=find(shoot.shooterId); if(!s) return;
+  const log=document.getElementById('supLog'); if(!log) return;
+  const st=shoot._supStatus||{};
+  const foes=combatants.filter(c=>c.side!==s.side&&!c.isCover&&c.hp>0&&st[c.id]&&st[c.id].affected);
+  let out='';
+  foes.forEach(d=>{
+    let base=0;
+    if(d.skills&&d.charStats) base=(d.charStats.will||0)+getSkillLevel(d.skills,'concentration')+getSkillMisc(d,'concentration');
+    else base=d.ncn||0;
+    const r=rollAttackRoll(base); const holds=r.total>shoot.suppressDV;
+    if(!holds){
+      d.conditions=d.conditions||[];
+      if(!d.conditions.some(x=>/pinned/i.test(x.name))) d.conditions.push({name:'Pinned — next Move must reach cover',rounds:1});
+      logEvent('▽ '+d.name+' is pinned by suppressive fire — must Move to cover','');
+    }
+    out+='<div class="death-res '+(holds?'ok':'bad')+'">'+esc(d.name)+': '+(holds?'HOLDS':'PINNED')+
+      ' — 1d10 ['+r.chain.join(' → ')+'] +'+base+' = '+r.total+' vs '+shoot.suppressDV+'</div>';
+  });
+  log.innerHTML=out+log.innerHTML;
+  save(); renderCombat();
+}
 function supAutoFill(){
   const sel=document.getElementById('supDefTarget');
   const inp=document.getElementById('supDef');
@@ -2708,6 +2883,12 @@ function rollSuppressDefender(){
   const defName=sel&&sel.selectedIndex>0?sel.options[sel.selectedIndex].text.split(' — ')[0]:'Defender';
   const r=rollAttackRoll(base); const beat=r.total>shoot.suppressDV;
   const log=document.getElementById('supLog');
+  if(!beat){
+    const d=combatants.find(c=>c.name===defName&&!c.isCover);
+    if(d){ d.conditions=d.conditions||[];
+      if(!d.conditions.some(x=>/pinned/i.test(x.name))) d.conditions.push({name:'Pinned — next Move must reach cover',rounds:1});
+      logEvent('▽ '+d.name+' is pinned by suppressive fire — must Move to cover',''); save(); renderCombat(); }
+  }
   log.innerHTML='<div class="death-res '+(beat?'ok':'bad')+'">'+esc(defName)+': '+
     (beat?'HOLDS':'PINNED')+' — 1d10 ['+r.chain.join(' → ')+'] +'+base+' = '+r.total+' vs '+shoot.suppressDV+
     (beat?'':' · must Move to cover next turn')+'</div>'+log.innerHTML; }
@@ -7634,7 +7815,8 @@ const G={cols:20,rows:20,cell:40,ox:0,oy:0,zoom:1,sel:null,
   measure:false,mFrom:null,mTo:null,
   pointers:new Map(),pinchD0:0,
   coverStart:null,coverEnd:null,
-  floorDeco:[],floorPaint:null};
+  floorDeco:[],floorPaint:null,
+  aim:null};
 let gridPlaceMode=null;
 
 /* ---- TOKEN IMAGE CACHE ---- */
@@ -7664,7 +7846,7 @@ function openGrid(){
     gridBindEvents(cv);
   });
 }
-function closeGrid(){ document.getElementById('gridOverlay').classList.remove('open'); }
+function closeGrid(){ G.aim=null; document.getElementById('gridOverlay').classList.remove('open'); }
 
 function gridResetView(){
   const cv=document.getElementById('gridCanvas');
@@ -7755,7 +7937,7 @@ function gridCellsFree(x,y,w,h,ignore){
 }
 /* chairs, stools, benches and real vehicles can be stood on / climbed into.
    Plain scenery cars (isCover but not isVehicle) stay solid. */
-const GRID_ENTERABLE_RE=/(^|[\s(])(chair|stool|bench|seat|couch|sofa|bed)([\s)]|$)/i;
+const GRID_ENTERABLE_RE=/(^|[\s(])(chair|stool|bench|seat|couch|sofa|bed|booth)([\s)]|$)/i;
 function gridEnterable(c){
   return !!c && c.isCover && (c.isVehicle || GRID_ENTERABLE_RE.test(c.name||''));
 }
@@ -7793,6 +7975,49 @@ function gridCellCenter(gx,gy){
 function gridDist(a,b){
   const dx=Math.abs(a.gridX-b.gridX), dy=Math.abs(a.gridY-b.gridY);
   return Math.round(Math.sqrt(dx*dx+dy*dy)*2); /* 2m per cell */
+}
+/* metres between two combatants, centre-to-centre and footprint-aware (null if not both placed) */
+function combatGridDist(a,b){
+  if(!a||!b||a.gridX==null||b.gridX==null) return null;
+  const ax=a.gridX+((a.gridW||1)-1)/2, ay=a.gridY+((a.gridH||1)-1)/2;
+  const bx=b.gridX+((b.gridW||1)-1)/2, by=b.gridY+((b.gridH||1)-1)/2;
+  return Math.round(Math.hypot(ax-bx,ay-by)*2);
+}
+/* is a (1×1) touching b's footprint, including diagonally or standing on it? */
+function gridAdjacent(a,b){
+  if(!a||!b||a.gridX==null||b.gridX==null) return true; /* no map → don't enforce */
+  const bw=b.gridW||1, bh=b.gridH||1;
+  return a.gridX>=b.gridX-1 && a.gridX<=b.gridX+bw &&
+         a.gridY>=b.gridY-1 && a.gridY<=b.gridY+bh;
+}
+/* clear line of sight — no living solid (non-enterable) cover strictly between the cells */
+function gridLOS(a,b){
+  if(!a||!b||a.gridX==null||b.gridX==null) return true;
+  const dx=b.gridX-a.gridX, dy=b.gridY-a.gridY;
+  const steps=Math.max(1,Math.round(Math.hypot(dx,dy)*2));
+  for(let i=1;i<steps;i++){
+    const gx=Math.round(a.gridX+dx*i/steps), gy=Math.round(a.gridY+dy*i/steps);
+    if((gx===a.gridX&&gy===a.gridY)||(gx===b.gridX&&gy===b.gridY)) continue;
+    if(combatants.some(c=>c.isCover&&c.hp>0&&!gridEnterable(c)&&gridInFootprint(c,gx,gy))) return false;
+  }
+  return true;
+}
+/* is this combatant currently benefiting from cover (behind or inside living cover)? */
+function gridInCover(c){
+  if(!c||c.isCover||!c.behindCoverId) return false;
+  const cv=find(c.behindCoverId);
+  return !!(cv&&cv.isCover&&cv.hp>0);
+}
+/* does cover cv's footprint lie on the line from cell `from` {x,y} to combatant `to`? */
+function gridCoverBetween(cv,from,to){
+  if(!cv||!from||to.gridX==null) return false;
+  const dx=to.gridX-from.x, dy=to.gridY-from.y;
+  const steps=Math.max(1,Math.round(Math.hypot(dx,dy)*2));
+  for(let i=0;i<=steps;i++){
+    const gx=Math.round(from.x+dx*i/steps), gy=Math.round(from.y+dy*i/steps);
+    if(gridInFootprint(cv,gx,gy)) return true;
+  }
+  return false;
 }
 
 /* ---- GRID SPRITES (top-down canvas-drawn objects) ---- */
@@ -8800,11 +9025,51 @@ function gridDraw(){
     }
   }
 
+  /* ---- AoE AIM SQUARE ---- */
+  if(G.aim){
+    const s=combatants.find(x=>x.id===G.aim.shooterId);
+    const z=gridAimCells();
+    const zx=G.ox+z.x*c, zy=G.oy+z.y*c, zw=z.w*c, zh=z.h*c;
+    const shell=G.aim.mode==='shell';
+    /* dashed reach line from shooter to square centre */
+    if(s&&s.gridX!=null){
+      const sp=gridCellCenter(s.gridX,s.gridY);
+      const cp={x:G.ox+(z.cx+0.5)*c, y:G.oy+(z.cy+0.5)*c};
+      ctx.beginPath(); ctx.moveTo(sp.x,sp.y); ctx.lineTo(cp.x,cp.y);
+      ctx.strokeStyle='rgba(255,90,60,.55)'; ctx.lineWidth=2; ctx.setLineDash([6,4]); ctx.stroke(); ctx.setLineDash([]);
+    }
+    /* the square */
+    ctx.fillStyle=shell?'rgba(255,180,40,.18)':'rgba(255,60,40,.2)';
+    ctx.strokeStyle=shell?'rgba(255,200,80,.9)':'rgba(255,80,60,.95)';
+    ctx.lineWidth=2.5;
+    ctx.fillRect(zx,zy,zw,zh); ctx.strokeRect(zx,zy,zw,zh);
+    if(c>10){ ctx.strokeStyle=shell?'rgba(255,200,80,.25)':'rgba(255,90,70,.28)'; ctx.lineWidth=1;
+      for(let i=1;i<z.w;i++){ ctx.beginPath(); ctx.moveTo(zx+i*c,zy); ctx.lineTo(zx+i*c,zy+zh); ctx.stroke(); }
+      for(let i=1;i<z.h;i++){ ctx.beginPath(); ctx.moveTo(zx,zy+i*c); ctx.lineTo(zx+zw,zy+i*c); ctx.stroke(); }
+    }
+    /* ring everyone caught */
+    const {chars,covers}=gridAimTargets();
+    chars.concat(covers).forEach(t=>{
+      const w=t.gridW||1,h=t.gridH||1;
+      const tx=G.ox+t.gridX*c, ty=G.oy+t.gridY*c;
+      ctx.strokeStyle=t.isCover?'rgba(255,220,120,.9)':'#ff4d4d';
+      ctx.lineWidth=3; ctx.strokeRect(tx+2,ty+2,w*c-4,h*c-4);
+    });
+    /* label */
+    const rng=s?Math.round(Math.hypot(z.cx-s.gridX,z.cy-s.gridY)*2):0;
+    const lab=(shell?'6 m SHELL · ':'10 m BLAST · ')+chars.length+' hit'+(s?' · '+rng+' m':'');
+    ctx.font='bold 12px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+    const lw=ctx.measureText(lab).width;
+    ctx.fillStyle='rgba(0,0,0,.72)'; ctx.beginPath(); ctx.roundRect(zx+zw/2-lw/2-6,zy-22,lw+12,18,4); ctx.fill();
+    ctx.fillStyle=shell?'#ffd27a':'#ff8a7a'; ctx.fillText(lab,zx+zw/2,zy-5);
+  }
+
   /* update combat HUD */
   gridUpdateHUD();
 }
 
 function gridToggleMeasure(){
+  if(G.aim) return;
   G.measure=!G.measure; G.mFrom=null; G.mTo=null;
   const btn=document.getElementById('gridMeasBtn');
   if(btn) btn.classList.toggle('active',G.measure);
@@ -8846,6 +9111,15 @@ function gridPDown(e){
 
   const p=gridPtrXY(e);
   const gc=gridScreenToCell(p.x,p.y);
+
+  /* AoE aim mode: tap/drag positions the square */
+  if(G.aim){
+    gridAimSetFromCell(gc.x,gc.y);
+    G.aimDragging=true;
+    gridDraw(); gridUpdateHUD();
+    return;
+  }
+
   /* a character sitting on cover is "on top" — grab it first */
   const tok=gridCharAt(gc.x,gc.y)||gridTokenAt(gc.x,gc.y);
 
@@ -8895,6 +9169,13 @@ function gridPMove(e){
   }
 
   const p=gridPtrXY(e);
+
+  if(G.aim&&G.aimDragging){
+    const gc=gridScreenToCell(p.x,p.y);
+    gridAimSetFromCell(gc.x,gc.y);
+    gridDraw(); gridUpdateHUD();
+    return;
+  }
 
   if(G.drag){
     const dx=Math.abs(p.x-G.dragSX), dy=Math.abs(p.y-G.dragSY);
@@ -8953,6 +9234,8 @@ function gridPUp(e){
   cv.releasePointerCapture(e.pointerId);
   G.pointers.delete(e.pointerId);
   cv.style.cursor='grab';
+
+  if(G.aim){ G.aimDragging=false; gridUpdateHUD(); return; }
 
   if(G.drag&&!G.dragMoved){
     /* tap on token = select or measure */
@@ -9694,13 +9977,15 @@ function gridUpdateHUD(){
   } else {
     label.textContent='No active turn';
   }
-  /* show remove button when a token is selected */
-  const rb=document.getElementById('gridRemBtn');
-  if(rb) rb.style.display=G.sel?'':'none';
-  const cb=document.getElementById('gridCloneBtn');
-  if(cb) cb.style.display=G.sel?'':'none';
+  const aiming=!!G.aim;
+  const show=(idc,on)=>{ const el=document.getElementById(idc); if(el) el.style.display=on?'':'none'; };
+  /* aiming: swap the toolbar for confirm / cancel */
+  show('gridAimOkBtn',aiming); show('gridAimCancelBtn',aiming);
+  show('gridNextBtn',!aiming); show('gridShootBtn',!aiming);
+  show('gridRemBtn',!aiming&&!!G.sel);
+  show('gridCloneBtn',!aiming&&!!G.sel);
   const rt=document.getElementById('gridRotBtn');
-  if(rt){ const s=G.sel?find(G.sel):null; rt.style.display=(s&&s.isCover)?'':'none'; }
+  if(rt){ const s=G.sel?find(G.sel):null; rt.style.display=(!aiming&&s&&s.isCover)?'':'none'; }
 }
 
 function gridRemoveSelected(){
@@ -9726,10 +10011,100 @@ function gridShoot(){
   const sel=G.sel?find(G.sel):null;
   const ac=activeId?find(activeId):null;
   const shooter=sel||ac;
-  if(!shooter||shooter.isCover){
-    toast('Select a combatant first'); return;
+  if(!shooter||shooter.isCover){ toast('Select a combatant first'); return; }
+  const list=shootWeaponList(shooter);
+  if(!list.length){ openShoot(shooter.id); return; }
+  if(list.length===1){ gridPickWeapon(shooter.id,0); return; }
+  /* let the player pick which weapon — area weapons aim on the map, the rest open the roll sheet */
+  let html='<div style="display:flex;flex-direction:column;gap:6px;">';
+  list.forEach((w,i)=>{
+    const area=w.areaMode==='blast'?' · ◎ 10 m blast':w.areaMode==='shell'?' · ▤ 6 m shell':'';
+    html+='<button class="btn ghost wide" style="text-align:left;padding:11px;" onclick="gridPickWeapon(\''+shooter.id+'\','+i+')">'+
+      '<b>'+esc(w.name)+'</b> <span style="color:var(--muted);">'+esc(w.dmg||'')+area+'</span></button>';
+  });
+  html+='</div>';
+  showModal('⚅ '+esc(shooter.name)+' — attack with',html);
+}
+function shootWeaponList(s){
+  let arr=(s.weapons||[]).slice();
+  if(s.behindCoverId&&s.seatRole){
+    const veh=find(s.behindCoverId);
+    if(veh&&veh.isVehicle&&veh.mountedWeapons){
+      veh.mountedWeapons.forEach(w=>{ if(w.firedBy===s.seatRole||(s.seatRole==='driver'&&w.firedBy==='driver')||(s.seatRole==='gunner'&&w.firedBy==='gunner')) arr.push(w); });
+    }
   }
-  openShoot(shooter.id);
+  return arr;
+}
+function gridPickWeapon(shooterId,wi){
+  const m=document.getElementById('tempModal'); if(m) m.classList.remove('open');
+  const s=find(shooterId); if(!s) return;
+  const w=shootWeaponList(s)[wi];
+  if(w&&(w.areaMode==='blast'||w.areaMode==='shell')&&s.gridX!=null){
+    gridStartAim(shooterId,wi,w.areaMode);
+  } else {
+    openShoot(shooterId,{wi:wi,fromMap:s.gridX!=null});
+  }
+}
+
+/* ---- AoE AIMING: drop a blast / shell square on the map ---- */
+function gridStartAim(shooterId,wi,mode){
+  const s=find(shooterId); if(!s||s.gridX==null) return;
+  const size=mode==='shell'?3:5;
+  /* start the square a little in front of the shooter */
+  let cx=s.gridX+size, cy=s.gridY;
+  cx=Math.max(0,Math.min(G.cols-size,cx)); cy=Math.max(0,Math.min(G.rows-size,cy-((size-1)>>1)));
+  G.aim={mode:mode,shooterId:shooterId,wi:wi,size:size,x:cx,y:cy};
+  G.sel=null; G.measure=false;
+  gridDraw(); gridUpdateHUD();
+  document.getElementById('gridInfo').textContent=mode==='shell'
+    ? '▤ Tap where to point the shell — 6 m (3×3) square in front of '+s.name
+    : '◎ Tap to drop the 10 m blast — everything inside is hit';
+}
+function gridAimCells(){
+  if(!G.aim) return null;
+  return {x:G.aim.x,y:G.aim.y,w:G.aim.size,h:G.aim.size,
+    cx:G.aim.x+(G.aim.size-1)/2, cy:G.aim.y+(G.aim.size-1)/2};
+}
+function gridAimSetFromCell(gx,gy){
+  if(!G.aim) return;
+  const s=find(G.aim.shooterId); const sz=G.aim.size;
+  if(G.aim.mode==='shell'&&s){
+    /* 3×3 block whose near edge touches the shooter, in the tapped direction */
+    let dx=gx-s.gridX, dy=gy-s.gridY;
+    const adx=Math.abs(dx), ady=Math.abs(dy);
+    dx=adx<ady*0.4?0:Math.sign(dx); dy=ady<adx*0.4?0:Math.sign(dy);
+    if(!dx&&!dy) dx=1;
+    const ccx=s.gridX+dx*2, ccy=s.gridY+dy*2;   /* centre 2 cells out */
+    G.aim.x=Math.max(0,Math.min(G.cols-sz,Math.round(ccx-(sz-1)/2)));
+    G.aim.y=Math.max(0,Math.min(G.rows-sz,Math.round(ccy-(sz-1)/2)));
+  } else {
+    G.aim.x=Math.max(0,Math.min(G.cols-sz,Math.round(gx-(sz-1)/2)));
+    G.aim.y=Math.max(0,Math.min(G.rows-sz,Math.round(gy-(sz-1)/2)));
+  }
+}
+function gridAimTargets(){
+  const z=gridAimCells(); if(!z) return {chars:[],covers:[]};
+  const hit=c=>{ if(c.gridX==null) return false;
+    const w=c.gridW||1,h=c.gridH||1;
+    return c.gridX < z.x+z.w && c.gridX+w > z.x && c.gridY < z.y+z.h && c.gridY+h > z.y; };
+  const chars=combatants.filter(c=>!c.isCover&&c.hp>0&&hit(c));
+  const covers=combatants.filter(c=>c.isCover&&c.hp>0&&hit(c));
+  return {chars,covers};
+}
+function gridAimCancel(){ G.aim=null; gridDraw(); gridUpdateHUD();
+  document.getElementById('gridInfo').textContent='Tap token to select · Drag to move'; }
+function gridAimConfirm(){
+  if(!G.aim) return;
+  const s=find(G.aim.shooterId); if(!s){ gridAimCancel(); return; }
+  const z=gridAimCells();
+  const {chars,covers}=gridAimTargets();
+  if(!chars.length&&!covers.length){ toast('Nobody in the square'); return; }
+  const ids=chars.map(c=>c.id).concat(covers.map(c=>c.id));
+  const range=Math.round(Math.hypot(z.cx-s.gridX,z.cy-s.gridY)*2);
+  const blastCenter={x:Math.round(z.cx),y:Math.round(z.cy)};
+  const mode=G.aim.mode, wi=G.aim.wi;
+  G.aim=null; gridDraw(); gridUpdateHUD();
+  openShoot(s.id,{wi:wi,fromMap:true,fireMode:mode==='shell'?'shell':'blast',multiIds:ids,range:range,blastCenter:mode==='shell'?null:blastCenter});
 }
 
 /* ---- AUTO-COVER: assign behindCoverId when adjacent to cover ---- */
@@ -9849,11 +10224,13 @@ renderTimeline(); renderCombat(); renderNotes(); renderLog(); renderRoster(); re
   <div class="grid-ftr">
     <div id="gridHUD" style="display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap;">
       <span id="gridTurnLabel" style="flex:1;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-      <button class="grid-btn" style="width:auto;padding:0 10px;font-size:12px;" onclick="gridNextTurn()">NEXT ▶</button>
-      <button class="grid-btn" style="width:auto;padding:0 10px;font-size:12px;" onclick="gridShoot()">⚅ SHOOT</button>
+      <button class="grid-btn" id="gridNextBtn" style="width:auto;padding:0 10px;font-size:12px;" onclick="gridNextTurn()">NEXT ▶</button>
+      <button class="grid-btn" id="gridShootBtn" style="width:auto;padding:0 10px;font-size:12px;" onclick="gridShoot()">⚅ SHOOT</button>
       <button class="grid-btn" id="gridRemBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;color:var(--red);" onclick="gridRemoveSelected()">✕ REM</button>
       <button class="grid-btn" id="gridRotBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;" onclick="gridRotateSelected()">⟳ ROTATE</button>
       <button class="grid-btn" id="gridCloneBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;" onclick="gridCloneSelected()">⧉ CLONE</button>
+      <button class="grid-btn" id="gridAimOkBtn" style="width:auto;padding:0 12px;font-size:12px;display:none;color:#7dff9b;font-weight:700;" onclick="gridAimConfirm()">✓ FIRE INTO SQUARE</button>
+      <button class="grid-btn" id="gridAimCancelBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;color:var(--red);" onclick="gridAimCancel()">✕ CANCEL</button>
     </div>
     <div id="gridInfo" style="font-size:10px;color:var(--muted);margin-top:3px;">Tap token to select · Drag to move</div>
   </div>
