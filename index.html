@@ -416,6 +416,7 @@
   body.sim .side-col{width:100%;}
   @media (max-width:559px){
     .battlefield{flex-direction:column;gap:16px;} .side-col{width:100%;}
+    .simtoggle,.rng-tag{display:none;}
   }
 
   /* ---------- CN CHIP ---------- */
@@ -587,9 +588,19 @@
   .cp-tracker.cp-extreme{background:rgba(255,0,0,.2);border:2px solid #ff2222;color:#ff2222;}
 
   /* ---------- VTT GRID ---------- */
-  .grid-overlay{position:fixed;inset:0;width:100%;height:100vh;height:100dvh;background:var(--bg);
-    z-index:55;display:none;flex-direction:column;overflow:hidden;}
+  .grid-overlay{position:fixed;top:var(--hdr);bottom:0;left:0;right:0;background:var(--bg);
+    z-index:15;display:none;flex-direction:column;overflow:hidden;}
   .grid-overlay.open{display:flex;}
+  .map-list{flex:1 1 auto;overflow-y:auto;padding:12px 14px;display:none;}
+  .map-list #turnBar{position:sticky;top:0;}
+  .map-list .col-head{position:sticky;top:var(--tbar);}
+  .tools-group{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;color:var(--muted);
+    font-weight:700;margin:16px 0 4px;text-transform:uppercase;}
+  .tools-group:first-child{margin-top:0;}
+  .tools-row{display:flex;align-items:center;gap:12px;padding:12px 2px;border-bottom:1px solid var(--line);cursor:pointer;}
+  .tools-row:last-child{border-bottom:none;}
+  .tools-ic{font-size:16px;width:22px;text-align:center;flex:0 0 auto;}
+  .tools-chev{color:var(--muted);font-size:15px;}
   .grid-hdr{display:flex;align-items:center;justify-content:space-between;gap:6px 8px;flex-wrap:wrap;
     padding:calc(8px + env(safe-area-inset-top)) 10px 8px;
     background:var(--panel);border-bottom:1px solid var(--line);flex:0 0 auto;}
@@ -830,103 +841,55 @@
   <div class="logo"><span class="r">RED</span> <span class="slash">//</span> COMPANION</div>
   <button class="simtoggle" onclick="toggleSim(this)">▢ MOBILE VIEW</button>
   <div class="rng-tag">SECURE RNG</div>
+  <button class="grid-btn" style="margin-left:auto;" onclick="openTools()" title="Tools">🛠</button>
+  <button class="grid-btn" onclick="openCloudSync()" title="Cloud sync">☁</button>
 </header>
 
 <main>
   <!-- ============ DICE ============ -->
-  <section id="dice" class="view active">
-    <div class="dice-wrap">
-      <div class="dice-left">
-        <div class="sl" style="margin-bottom:4px;">MODIFIER</div>
-        <div class="mod-ctrl">
-          <button class="mod-step" aria-label="Decrease modifier" onclick="bumpMod(-1)">−</button>
-          <input id="diceMod" type="number" inputmode="numeric" value="0" oninput="diceMod=parseInt(this.value)||0">
-          <button class="mod-step" aria-label="Increase modifier" onclick="bumpMod(1)">+</button>
+  <section id="dice" class="view">
+    <div class="seg" style="margin-bottom:12px;">
+      <button id="diceModeTimelineBtn" class="sel-a" onclick="setDiceMode('timeline')">TIMELINE</button>
+      <button id="diceModeLogBtn" onclick="setDiceMode('log')">LOG</button>
+    </div>
+    <div id="diceTimelinePanel">
+      <div class="dice-wrap">
+        <div class="dice-left">
+          <div class="sl" style="margin-bottom:4px;">MODIFIER</div>
+          <div class="mod-ctrl">
+            <button class="mod-step" aria-label="Decrease modifier" onclick="bumpMod(-1)">−</button>
+            <input id="diceMod" type="number" inputmode="numeric" value="0" oninput="diceMod=parseInt(this.value)||0">
+            <button class="mod-step" aria-label="Increase modifier" onclick="bumpMod(1)">+</button>
+          </div>
+          <div class="dice-icons">
+            <button class="die-ico" onclick="rollTheDie(4)">d4</button>
+            <button class="die-ico" onclick="rollTheDie(6)">d6</button>
+            <button class="die-ico" onclick="rollTheDie(8)">d8</button>
+            <button class="die-ico" onclick="rollTheDie(10)">d10</button>
+            <button class="die-ico" onclick="rollTheDie(12)">d12</button>
+            <button class="die-ico" onclick="rollTheDie(20)">d20</button>
+            <button class="die-ico" style="grid-column:span 2;" onclick="rollTheDie(100)">d100</button>
+          </div>
+          <label class="explode-toggle">
+            <input type="checkbox" id="explodeChk" onchange="explodeD10=this.checked"> ↯ explode d10 (skill-check crit)
+          </label>
+          <div class="notation-mini">
+            <input id="notation" placeholder="2d6+3" onkeydown="if(event.key==='Enter')rollNotation()">
+            <button class="btn ghost sm" onclick="rollNotation()">ROLL</button>
+          </div>
         </div>
-        <div class="dice-icons">
-          <button class="die-ico" onclick="rollTheDie(4)">d4</button>
-          <button class="die-ico" onclick="rollTheDie(6)">d6</button>
-          <button class="die-ico" onclick="rollTheDie(8)">d8</button>
-          <button class="die-ico" onclick="rollTheDie(10)">d10</button>
-          <button class="die-ico" onclick="rollTheDie(12)">d12</button>
-          <button class="die-ico" onclick="rollTheDie(20)">d20</button>
-          <button class="die-ico" style="grid-column:span 2;" onclick="rollTheDie(100)">d100</button>
-        </div>
-        <label class="explode-toggle">
-          <input type="checkbox" id="explodeChk" onchange="explodeD10=this.checked"> ↯ explode d10 (skill-check crit)
-        </label>
-        <div class="notation-mini">
-          <input id="notation" placeholder="2d6+3" onkeydown="if(event.key==='Enter')rollNotation()">
-          <button class="btn ghost sm" onclick="rollNotation()">ROLL</button>
+        <div class="dice-right">
+          <div class="tl-head">TIMELINE</div>
+          <div id="timeline" class="timeline"><div class="tl-empty">Tap a die.</div></div>
         </div>
       </div>
-      <div class="dice-right">
-        <div class="tl-head">TIMELINE</div>
-        <div id="timeline" class="timeline"><div class="tl-empty">Tap a die.</div></div>
+    </div>
+    <div id="diceLogPanel" style="display:none;">
+      <div class="toolbar">
+        <button class="btn ghost" onclick="clearLog()">CLEAR LOG</button>
       </div>
+      <div id="logList"></div>
     </div>
-  </section>
-
-  <!-- ============ COMBAT ============ -->
-  <section id="combat" class="view">
-    <div class="seg" id="filterSeg">
-      <button id="fAll" class="fsel" onclick="setFilter('all')">ALL</button>
-      <button id="fAlly" onclick="setFilter('ally')">ALLIES</button>
-      <button id="fEnemy" onclick="setFilter('enemy')">ENEMIES</button>
-    </div>
-    <div class="toolbar">
-      <button class="btn ghost" onclick="openRosterPick()">◉ ROSTER</button>
-      <button class="btn ghost" onclick="openLibrary()">☰ NPCs</button>
-      <button class="btn ghost" onclick="toggleSort()"><span id="sortLabel">SORT: ADDED</span></button>
-      <button class="btn ghost" onclick="openGrid()">🗺</button>
-      <button class="btn ghost more" id="tbMoreBtn" aria-haspopup="menu" aria-expanded="false"
-        aria-label="More actions" onclick="toggleToolMenu(event)">⋯</button>
-      <div class="tb-menu" id="tbMenu" role="menu">
-        <button role="menuitem" onclick="runTool(openRange)">↔ Range DVs</button>
-        <button role="menuitem" onclick="runTool(openDVReference)">📋 Skill DV reference</button>
-        <button role="menuitem" onclick="runTool(openVehicleCombatTools)">🚗 Vehicle combat</button>
-        <button role="menuitem" onclick="runTool(openSaveLoad)">⇅ Save / load</button>
-        <button role="menuitem" onclick="runTool(downloadFullBackup)">💾 Full backup</button>
-        <button role="menuitem" onclick="runTool(openCloudSync)">☁ Cloud sync (Gist)</button>
-        <div class="sep"></div>
-        <button role="menuitem" class="danger" onclick="runTool(clearEncounter)">✕ New encounter</button>
-      </div>
-    </div>
-
-    <details class="addform" id="addForm">
-      <summary>+ ADD COMBATANT</summary>
-      <div class="addbody">
-        <div class="seg" style="margin-bottom:10px;">
-          <button id="segAlly" onclick="setSide('ally')">ALLY</button>
-          <button id="segEnemy" class="sel-e" onclick="setSide('enemy')">ENEMY</button>
-        </div>
-        <div class="row">
-          <div class="field" style="flex:2;"><label class="sl">NAME</label><input id="nName" placeholder="Maelstrom Goon"></div>
-          <div class="field"><label class="sl">INIT</label><input id="nInit" type="number" inputmode="numeric" placeholder="0"></div>
-          <div class="field"><label class="sl">CN</label><input id="nCN" type="number" inputmode="numeric" placeholder="0"></div>
-        </div>
-        <div class="row">
-          <div class="field"><label class="sl">HP (MAX)</label><input id="nHP" type="number" inputmode="numeric" placeholder="40"></div>
-          <div class="field"><label class="sl">HEAD SP</label><input id="nHead" type="number" inputmode="numeric" placeholder="0"></div>
-          <div class="field"><label class="sl">BODY SP</label><input id="nBody" type="number" inputmode="numeric" placeholder="0"></div>
-        </div>
-        <label class="cover-toggle"><input type="checkbox" id="nCover"> ▨ Cover / object — can't shoot, no crits, soaks damage</label>
-        <button class="btn cyan wide" onclick="addCombatant()">ADD</button>
-        <div class="hint">Add weapons after, from each combatant's inventory (tap the ▼ arrow).</div>
-      </div>
-    </details>
-
-    <div id="turnBar"></div>
-    <div id="combatList"></div>
-  </section>
-
-  <!-- ============ CALC ============ -->
-  <!-- ============ COMBAT LOG ============ -->
-  <section id="log" class="view">
-    <div class="toolbar">
-      <button class="btn ghost" onclick="clearLog()">CLEAR LOG</button>
-    </div>
-    <div id="logList"></div>
   </section>
 
   <section id="calc" class="view">
@@ -990,12 +953,9 @@
 <div id="toast" class="toast"><span id="toastMsg"></span><button onclick="doUndo()">UNDO</button></div>
 
 <nav>
-  <button class="active" onclick="showView('dice',this)"><span class="ic">⚄</span>DICE</button>
-  <button onclick="showView('combat',this)"><span class="ic">⚔</span>COMBAT</button>
-  <button onclick="showView('log',this)"><span class="ic">▤</span>LOG</button>
+  <button class="active" onclick="showMapTab(this)"><span class="ic">🗺</span>MAP</button>
+  <button onclick="showView('dice',this)"><span class="ic">⚄</span>DICE</button>
   <button onclick="showView('roster',this)"><span class="ic">◉</span>CHARS</button>
-  <button onclick="showView('calc',this)"><span class="ic">▦</span>CALC</button>
-  <button onclick="showView('notes',this)"><span class="ic">✎</span>NOTES</button>
 </nav>
 </div><!-- /#device -->
 
@@ -1164,6 +1124,82 @@
   </div>
 </div>
 
+<div id="gridOverlay" class="grid-overlay">
+  <div class="grid-hdr">
+    <span class="grid-title">🗺 BATTLE MAP</span>
+    <div class="grid-tools">
+      <button class="grid-btn active" id="mapModeMapBtn" onclick="setMapMode('map')" title="Map view">🗺</button>
+      <button class="grid-btn" id="mapModeListBtn" onclick="setMapMode('list')" title="List view">☰</button>
+      <div id="mapCanvasTools" style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="grid-btn" onclick="openTokenStyle()" title="Token style">⚙</button>
+        <button class="grid-btn" id="gridMeasBtn" onclick="gridToggleMeasure()" title="Measure">📏</button>
+        <button class="grid-btn active" id="gridReachBtn" onclick="gridToggleReach()" title="Show Move / Run reach">🥾</button>
+        <button class="grid-btn active" id="gridLOSBtn" onclick="gridToggleLOS()" title="Line-of-sight preview">👁</button>
+        <button class="grid-btn" onclick="gridAddCover()" title="Object library">📦</button>
+        <button class="grid-btn" onclick="gridFloorPicker()" title="Floor paint">🎨</button>
+        <button class="grid-btn" onclick="gridPresets()" title="Encounter maps">🗺</button>
+        <button class="grid-btn" onclick="gridCleanMenu()" title="Clear map">🧹</button>
+        <button class="grid-btn" onclick="gridResetView()" title="Reset view">⟲</button>
+        <button class="grid-btn" onclick="gridResize()" title="Grid size">⊞</button>
+      </div>
+    </div>
+  </div>
+  <div id="mapCanvasPanel" style="display:flex;flex-direction:column;flex:1;min-height:0;">
+    <div id="gridInitStrip"></div>
+    <canvas id="gridCanvas"></canvas>
+    <div class="grid-ftr">
+      <div id="gridHUD" style="display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap;">
+        <span id="gridTurnLabel" style="flex:1;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+        <button class="grid-btn" id="gridNextBtn" style="width:auto;padding:0 10px;font-size:12px;" onclick="gridNextTurn()">NEXT ▶</button>
+        <button class="grid-btn" id="gridShootBtn" style="width:auto;padding:0 10px;font-size:12px;" onclick="gridShoot()">⚅ SHOOT</button>
+        <button class="grid-btn" id="gridGrenBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;" onclick="gridThrowGrenade()" title="Throw a grenade">💣 NADE</button>
+        <button class="grid-btn" id="gridSheetBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;" onclick="gridOpenSheet()">📋 SHEET</button>
+        <button class="grid-btn" id="gridFitImgBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;" onclick="gridTokenImageFit()" title="Frame the token portrait">🖼</button>
+        <button class="grid-btn" id="gridRemBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;color:var(--red);" onclick="gridRemoveSelected()">✕ REM</button>
+        <button class="grid-btn" id="gridRotBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;" onclick="gridRotateSelected()">⟳ ROTATE</button>
+        <button class="grid-btn" id="gridCloneBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;" onclick="gridCloneSelected()">⧉ CLONE</button>
+        <button class="grid-btn" id="gridAimOkBtn" style="width:auto;padding:0 12px;font-size:12px;display:none;color:#7dff9b;font-weight:700;" onclick="gridAimConfirm()">✓ FIRE INTO SQUARE</button>
+        <button class="grid-btn" id="gridAimCancelBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;color:var(--red);" onclick="gridAimCancel()">✕ CANCEL</button>
+        <button class="grid-btn" id="gridExitPlaceBtn" style="width:auto;padding:0 12px;font-size:12px;display:none;color:var(--amber);font-weight:700;" onclick="gridExitPlace()">✓ DONE PLACING</button>
+      </div>
+      <div id="gridInfo" style="font-size:10px;color:var(--muted);margin-top:3px;">Tap token to select · Drag to move</div>
+    </div>
+  </div>
+  <section id="combat" class="map-list">
+    <div class="seg" id="filterSeg">
+      <button id="fAll" class="fsel" onclick="setFilter('all')">ALL</button>
+      <button id="fAlly" onclick="setFilter('ally')">ALLIES</button>
+      <button id="fEnemy" onclick="setFilter('enemy')">ENEMIES</button>
+    </div>
+
+    <details class="addform" id="addForm">
+      <summary>+ ADD COMBATANT</summary>
+      <div class="addbody">
+        <div class="seg" style="margin-bottom:10px;">
+          <button id="segAlly" onclick="setSide('ally')">ALLY</button>
+          <button id="segEnemy" class="sel-e" onclick="setSide('enemy')">ENEMY</button>
+        </div>
+        <div class="row">
+          <div class="field" style="flex:2;"><label class="sl">NAME</label><input id="nName" placeholder="Maelstrom Goon"></div>
+          <div class="field"><label class="sl">INIT</label><input id="nInit" type="number" inputmode="numeric" placeholder="0"></div>
+          <div class="field"><label class="sl">CN</label><input id="nCN" type="number" inputmode="numeric" placeholder="0"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label class="sl">HP (MAX)</label><input id="nHP" type="number" inputmode="numeric" placeholder="40"></div>
+          <div class="field"><label class="sl">HEAD SP</label><input id="nHead" type="number" inputmode="numeric" placeholder="0"></div>
+          <div class="field"><label class="sl">BODY SP</label><input id="nBody" type="number" inputmode="numeric" placeholder="0"></div>
+        </div>
+        <label class="cover-toggle"><input type="checkbox" id="nCover"> ▨ Cover / object — can't shoot, no crits, soaks damage</label>
+        <button class="btn cyan wide" onclick="addCombatant()">ADD</button>
+        <div class="hint">Add weapons after, from each combatant's inventory (tap the ▼ arrow).</div>
+      </div>
+    </details>
+
+    <div id="turnBar"></div>
+    <div id="combatList"></div>
+  </section>
+</div>
+
 <script>
 /* ============ STORAGE ============ */
 const store=(()=>{ let ok=true; try{localStorage.setItem('__t','1');localStorage.removeItem('__t');}catch(e){ok=false;}
@@ -1171,7 +1207,7 @@ const store=(()=>{ let ok=true; try{localStorage.setItem('__t','1');localStorage
   set(k,v){try{ok?localStorage.setItem(k,v):(mem[k]=v);}catch(e){mem[k]=v;}}}; })();
 function save(){ store.set('cpred_combat',JSON.stringify(combatants)); store.set('cpred_notes',JSON.stringify(notesData));
   store.set('cpred_sort',sortMode); store.set('cpred_turn',JSON.stringify({round:roundNo,activeId:activeId}));
-  store.set('cpred_log',JSON.stringify(combatLog)); }
+  store.set('cpred_log',JSON.stringify(combatLog)); store.set('cpred_tokenstyle',JSON.stringify(tokenStyle)); }
 
 /* ============ SECURE RNG ============ */
 function randInt(max){ const maxUnbiased=Math.floor(4294967296/max)*max; const buf=new Uint32Array(1); let x;
@@ -1184,11 +1220,66 @@ function rollAttackRoll(mod){ let first=randInt(10),chain=[first],extra=0,crit=n
   return {total:first+extra+(mod||0), chain, crit}; }
 
 /* ============ NAV / SIM ============ */
-function showView(id,btn){ document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+function showView(id,btn){ document.getElementById('gridOverlay').classList.remove('open');
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active')); if(btn) btn.classList.add('active');
   (document.body.classList.contains('sim')?document.querySelector('#device main'):window).scrollTo(0,0);
   closeToolMenu(); syncStickyOffsets(); }
+function showMapTab(btn){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  openGrid();
+  closeToolMenu(); syncStickyOffsets();
+}
+function setMapMode(mode){
+  const isMap=mode==='map';
+  document.getElementById('mapCanvasPanel').style.display=isMap?'flex':'none';
+  document.getElementById('mapCanvasTools').style.display=isMap?'flex':'none';
+  document.getElementById('combat').style.display=isMap?'none':'block';
+  document.getElementById('mapModeMapBtn').classList.toggle('active',isMap);
+  document.getElementById('mapModeListBtn').classList.toggle('active',!isMap);
+  if(isMap){ gridAutoPlace(); gridFitCanvas(); gridDraw(); }
+  else { renderCombat(); renderTurnBar(); }
+}
+function setDiceMode(mode){
+  const t=mode==='timeline';
+  document.getElementById('diceTimelinePanel').style.display=t?'block':'none';
+  document.getElementById('diceLogPanel').style.display=t?'none':'block';
+  document.getElementById('diceModeTimelineBtn').classList.toggle('sel-a',t);
+  document.getElementById('diceModeLogBtn').classList.toggle('sel-a',!t);
+  if(!t) renderLog();
+}
+function goCalc(){ showView('calc',null); }
+function goNotes(){ showView('notes',null); }
+function runToolModal(fn){ document.getElementById('tempModal').classList.remove('open'); if(typeof fn==='function') fn(); }
+function openTools(){
+  const group=(title,rows)=>'<div class="tools-group">'+title+'</div><div>'+rows+'</div>';
+  const row=(fnName,icon,label)=>'<div class="tools-row" onclick="runToolModal('+fnName+')"><span class="tools-ic">'+icon+'</span><span style="flex:1;">'+label+'</span><span class="tools-chev">›</span></div>';
+  const html=
+    group('ENCOUNTER SETUP',
+      row('openRosterPick','◉','Roster picker')+
+      row('openLibrary','☰','NPC library')+
+      row('toggleSort','⇅','Sort: <span id="sortLabel">'+(sortMode==='init'?'INIT':'ADDED')+'</span>')+
+      row('clearEncounter','✕','New encounter')
+    )+
+    group('REFERENCE',
+      row('openRange','↔','Range DV reference')+
+      row('openDVReference','📋','Skill DV reference')+
+      row('openVehicleCombatTools','🚗','Vehicle combat tools')
+    )+
+    group('DATA',
+      row('openSaveLoad','⇅','Save / Load')+
+      row('downloadFullBackup','💾','Full backup')+
+      row('openCloudSync','☁','Cloud sync')
+    )+
+    group('UTILITIES',
+      row('goCalc','▦','Calculator')+
+      row('goNotes','✎','Notes')
+    );
+  showModal('🛠 TOOLS',html);
+}
 function toggleSim(btn){ document.body.classList.toggle('sim'); const on=document.body.classList.contains('sim');
   btn.textContent=on?'▢ EXIT MOBILE':'▢ MOBILE VIEW'; window.scrollTo(0,0); syncStickyOffsets(); }
 
@@ -1526,6 +1617,8 @@ function computeDV(rangeRow,meters,tbl){ tbl=tbl||'single';
 /* ============ COMBAT STATE ============ */
 let combatants=[]; let notesData=[]; let sortMode='added'; let combatFilter='all'; let newSide='enemy';
 let expandedIds=new Set(); let setupOpenIds=new Set(); let roundNo=1; let activeId=null;
+let tokenStyle={shape:'circle',showPortrait:true,showName:true,hpDisplay:'bar',scale:1};
+try{ Object.assign(tokenStyle, JSON.parse(store.get('cpred_tokenstyle'))||{}); }catch(e){}
 try{ combatants=JSON.parse(store.get('cpred_combat'))||[]; }catch(e){ combatants=[]; }
 try{ notesData=JSON.parse(store.get('cpred_notes'))||[]; }catch(e){ notesData=[]; }
 if(store.get('cpred_sort')) sortMode=store.get('cpred_sort');
@@ -5725,9 +5818,8 @@ function deployVehicle(id){
     mountedWeapons:mWeapons, vehicleSeats:v.seats,
     gridW:vg.w, gridH:vg.h
   });
-  document.querySelectorAll('.view').forEach(vw=>vw.classList.remove('active'));
-  document.getElementById('combat').classList.add('active');
-  document.querySelectorAll('nav button').forEach(b=>{b.classList.remove('active'); if(b.textContent.includes('COMBAT'))b.classList.add('active');});
+  showMapTab(document.querySelector('nav button'));
+  setMapMode('list');
   save(); renderCombat();
   toast('Deployed '+v.name+' to combat (top of init)');
 }
@@ -5879,7 +5971,8 @@ function buildBackupData(){
     log:combatLog,
     roster:roster,
     vehicles:vehicles,
-    architectures:architectures
+    architectures:architectures,
+    tokenStyle:tokenStyle
   };
 }
 function applyBackupData(data){
@@ -5891,7 +5984,9 @@ function applyBackupData(data){
   if(Array.isArray(data.roster)){ roster=data.roster; saveRoster(); }
   if(Array.isArray(data.vehicles)){ vehicles=data.vehicles; saveVehicles(); }
   if(Array.isArray(data.architectures)){ architectures=data.architectures; saveArchitectures(); }
+  if(data.tokenStyle&&typeof data.tokenStyle==='object') Object.assign(tokenStyle,data.tokenStyle);
   save(); renderCombat(); renderNotes(); renderLog(); renderRoster(); renderVehicleList(); renderArchitectureList();
+  if(document.getElementById('mapCanvasPanel').style.display!=='none') gridDraw();
 }
 
 function openCloudSync(){
@@ -7661,9 +7756,7 @@ let rpSide='ally';
 function openRosterPick(){
   if(!roster.length){
     /* no characters — redirect to the roster tab */
-    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-    document.getElementById('roster').classList.add('active');
-    document.querySelectorAll('nav button').forEach(b=>{b.classList.remove('active'); if(b.textContent.includes('CHARS'))b.classList.add('active');});
+    showView('roster',[...document.querySelectorAll('nav button')].find(b=>b.textContent.includes('CHARS')));
     return;
   }
   rpSide='ally'; document.getElementById('rpAdded').textContent='';
@@ -8151,6 +8244,32 @@ function openGrid(){
   setTimeout(()=>{ if(gridFitCanvas()) gridResetView(); },120);
 }
 function closeGrid(){ G.aim=null; document.getElementById('gridOverlay').classList.remove('open'); }
+
+function openTokenStyle(){ showModal('⚙ TOKEN STYLE',tokenStyleHtml()); }
+function tokenStyleHtml(){
+  const ts=tokenStyle;
+  const seg=(key,val,label)=>'<button class="'+(ts[key]===val?'sel-a':'')+'" style="flex:1;" onclick="setTokenStyle(\''+key+'\',\''+val+'\')">'+label+'</button>';
+  return ''+
+    '<div class="sl" style="margin-bottom:6px;">SHAPE</div>'+
+    '<div class="seg" style="margin-bottom:14px;">'+seg('shape','circle','CIRCLE')+seg('shape','square','SQUARE')+'</div>'+
+    '<div class="sl" style="margin-bottom:6px;">ARTWORK</div>'+
+    '<div class="seg" style="margin-bottom:14px;">'+
+      '<button class="'+(ts.showPortrait?'sel-a':'')+'" style="flex:1;" onclick="setTokenStyle(\'showPortrait\',true)">PORTRAIT</button>'+
+      '<button class="'+(!ts.showPortrait?'sel-a':'')+'" style="flex:1;" onclick="setTokenStyle(\'showPortrait\',false)">INITIALS</button>'+
+    '</div>'+
+    '<div class="sl" style="margin-bottom:6px;">SHOW NAME</div>'+
+    '<div class="seg" style="margin-bottom:14px;">'+
+      '<button class="'+(ts.showName?'sel-a':'')+'" style="flex:1;" onclick="setTokenStyle(\'showName\',true)">ON</button>'+
+      '<button class="'+(!ts.showName?'sel-a':'')+'" style="flex:1;" onclick="setTokenStyle(\'showName\',false)">OFF</button>'+
+    '</div>'+
+    '<div class="sl" style="margin-bottom:6px;">HP DISPLAY</div>'+
+    '<div class="seg" style="margin-bottom:14px;">'+seg('hpDisplay','bar','BAR')+seg('hpDisplay','number','NUMBER')+seg('hpDisplay','off','OFF')+'</div>'+
+    '<div class="sl" style="margin-bottom:6px;">TOKEN SIZE — '+Math.round((ts.scale||1)*100)+'%</div>'+
+    '<input type="range" min="0.8" max="1.3" step="0.05" value="'+(ts.scale||1)+'" style="width:100%;accent-color:var(--cyan);margin-bottom:14px;" '+
+      'oninput="tokenStyle.scale=parseFloat(this.value);gridDraw();" onchange="save();openTokenStyle();">'+
+    '<button class="btn cyan wide" onclick="document.getElementById(\'tempModal\').classList.remove(\'open\')">DONE</button>';
+}
+function setTokenStyle(key,val){ tokenStyle[key]=val; save(); gridDraw(); openTokenStyle(); }
 
 function gridResetView(){
   const cv=document.getElementById('gridCanvas');
@@ -9562,30 +9681,33 @@ function gridDraw(){
     const pos=gridCellCenter(t.gridX,t.gridY);
     const cx=pos.x, cy=pos.y;
     const seated=!!t.seatRole && !!combatants.find(v=>v.id===t.behindCoverId&&v.isVehicle);
-    const r=c*(seated?0.3:0.38);
+    const r=c*(seated?0.3:0.38)*(tokenStyle.scale||1);
     const isAlly=t.side!=='enemy';
     const dead=t.hp<=0;
+    const shapePath=(cx2,cy2,r2)=>{ ctx.beginPath();
+      if(tokenStyle.shape==='square'){ ctx.roundRect(cx2-r2,cy2-r2,r2*2,r2*2,Math.max(2,r2*0.22)); }
+      else { ctx.arc(cx2,cy2,r2,0,Math.PI*2); } };
 
     /* active turn glow */
     if(t.id===turnId&&!dead){
-      ctx.beginPath(); ctx.arc(cx,cy,r+8,0,Math.PI*2);
+      shapePath(cx,cy,r+8);
       const grd=ctx.createRadialGradient(cx,cy,r,cx,cy,r+8);
       grd.addColorStop(0,isAlly?'rgba(0,229,255,.3)':'rgba(255,60,60,.3)');
       grd.addColorStop(1,'transparent');
       ctx.fillStyle=grd; ctx.fill();
-      ctx.beginPath(); ctx.arc(cx,cy,r+4,0,Math.PI*2);
+      shapePath(cx,cy,r+4);
       ctx.strokeStyle=isAlly?'#00e5ff':'#ff4444';
       ctx.lineWidth=2.5; ctx.stroke();
     }
 
     /* selection ring */
     if(t.id===G.sel){
-      ctx.beginPath(); ctx.arc(cx,cy,r+3,0,Math.PI*2);
+      shapePath(cx,cy,r+3);
       ctx.strokeStyle='#fff'; ctx.lineWidth=2.5; ctx.stroke();
     }
 
     /* shadow */
-    ctx.beginPath(); ctx.arc(cx+1,cy+1,r,0,Math.PI*2);
+    shapePath(cx+1,cy+1,r);
     ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fill();
 
     /* check for character portrait image */
@@ -9593,17 +9715,17 @@ function gridDraw(){
     const portrait=(rChar&&rChar.images&&rChar.images.length)?rChar.images[0].data:null;
     let drewImage=false;
 
-    if(portrait&&!dead&&c>18){
-      /* draw circular clipped portrait */
+    if(portrait&&tokenStyle.showPortrait&&!dead&&c>18){
+      /* draw clipped portrait */
       const img=gridGetImage(portrait);
       if(img&&img.complete&&img.naturalWidth>0){
         ctx.save();
-        ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
+        shapePath(cx,cy,r); ctx.clip();
         const fr=gridImgFrame(img,cx,cy,r*2,rChar.images[0].fit);
         ctx.drawImage(img,fr.dx,fr.dy,fr.dw,fr.dh);
         ctx.restore();
         /* colored border ring */
-        ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+        shapePath(cx,cy,r);
         ctx.strokeStyle=isAlly?'#00e5ff':'#ff4444';
         ctx.lineWidth=2.5; ctx.stroke();
         drewImage=true;
@@ -9612,7 +9734,7 @@ function gridDraw(){
 
     if(!drewImage){
       /* solid color token body */
-      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+      shapePath(cx,cy,r);
       ctx.fillStyle=dead?'#2a2a2a':(isAlly?'#0099cc':'#cc2222');
       ctx.fill();
       ctx.strokeStyle=dead?'#444':(isAlly?'#00e5ff':'#ff4444');
@@ -9621,28 +9743,39 @@ function gridDraw(){
       /* initials */
       const ini=t.name.split(/[\s_-]+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase();
       ctx.fillStyle=dead?'#555':'#fff';
-      ctx.font='bold '+Math.max(9,c*0.32)+'px sans-serif';
+      ctx.font='bold '+Math.max(9,r*0.85)+'px sans-serif';
       ctx.textAlign='center'; ctx.textBaseline='middle';
       ctx.fillText(ini,cx,cy);
     }
 
-    /* HP bar */
-    if(!dead&&t.hpMax>0){
-      const bw=c*0.65, bh=Math.max(3,c*0.08);
-      const bx=cx-bw/2, by=cy+r+3;
+    /* HP display */
+    let hpBlockH=0;
+    if(!dead&&t.hpMax>0&&tokenStyle.hpDisplay!=='off'){
       const pct=Math.max(0,Math.min(1,t.hp/t.hpMax));
-      ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(bx-0.5,by-0.5,bw+1,bh+1);
-      ctx.fillStyle=pct>.5?'#22cc66':(pct>.25?'#ddaa00':'#ee3333');
-      ctx.fillRect(bx,by,bw*pct,bh);
+      const hpColor=pct>.5?'#22cc66':(pct>.25?'#ddaa00':'#ee3333');
+      if(tokenStyle.hpDisplay==='number'){
+        ctx.fillStyle=hpColor;
+        ctx.font='bold '+Math.max(9,r*0.42)+'px sans-serif';
+        ctx.textAlign='center'; ctx.textBaseline='top';
+        ctx.fillText(t.hp+'/'+t.hpMax,cx,cy+r+3);
+        hpBlockH=Math.max(9,r*0.42)+4;
+      } else {
+        const bw=r*1.71, bh=Math.max(3,r*0.21);
+        const bx=cx-bw/2, by=cy+r+3;
+        ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(bx-0.5,by-0.5,bw+1,bh+1);
+        ctx.fillStyle=hpColor;
+        ctx.fillRect(bx,by,bw*pct,bh);
+        hpBlockH=bh+3;
+      }
     }
 
-    /* name below HP bar */
-    if(c>25){
+    /* name below HP display */
+    if(tokenStyle.showName&&c>25){
       ctx.fillStyle=dead?'#444':'rgba(255,255,255,.6)';
       ctx.font=Math.max(7,c*0.18)+'px sans-serif';
       ctx.textAlign='center'; ctx.textBaseline='top';
       const nm=t.name.length>8?t.name.slice(0,7)+'…':t.name;
-      ctx.fillText(nm,cx,cy+r+Math.max(6,c*0.14));
+      ctx.fillText(nm,cx,cy+r+hpBlockH+Math.max(3,c*0.06));
     }
 
     /* generic behind-cover indicator (seat-role badges drawn in a later pass so they sit on top) */
@@ -9655,7 +9788,7 @@ function gridDraw(){
 
     /* no line of sight from the selected shooter — grey the token out */
     if(losBlocked&&!dead){
-      ctx.beginPath(); ctx.arc(cx,cy,r+1,0,Math.PI*2);
+      shapePath(cx,cy,r+1);
       ctx.fillStyle='rgba(20,22,26,.6)'; ctx.fill();
       if(c>16){ ctx.fillStyle='rgba(255,255,255,.55)'; ctx.font=Math.max(9,c*0.3)+'px sans-serif';
         ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('👁',cx,cy); }
@@ -11460,44 +11593,8 @@ function gridCleanDo(mode){
 
 /* ============ INIT ============ */
 setSide('enemy');
-document.getElementById('sortLabel').textContent='SORT: '+(sortMode==='init'?'INIT':'ADDED');
 renderTimeline(); renderCombat(); renderNotes(); renderLog(); renderRoster(); renderVehicleList(); renderArchitectureList(); calcRefresh(); syncStickyOffsets();
+showMapTab(document.querySelector('nav button'));
 </script>
-<div id="gridOverlay" class="grid-overlay">
-  <div class="grid-hdr">
-    <span class="grid-title">🗺 BATTLE MAP</span>
-    <div class="grid-tools">
-      <button class="grid-btn" id="gridMeasBtn" onclick="gridToggleMeasure()" title="Measure">📏</button>
-      <button class="grid-btn active" id="gridReachBtn" onclick="gridToggleReach()" title="Show Move / Run reach">🥾</button>
-      <button class="grid-btn active" id="gridLOSBtn" onclick="gridToggleLOS()" title="Line-of-sight preview">👁</button>
-      <button class="grid-btn" onclick="gridAddCover()" title="Object library">📦</button>
-      <button class="grid-btn" onclick="gridFloorPicker()" title="Floor paint">🎨</button>
-      <button class="grid-btn" onclick="gridPresets()" title="Encounter maps">🗺</button>
-      <button class="grid-btn" onclick="gridCleanMenu()" title="Clear map">🧹</button>
-      <button class="grid-btn" onclick="gridResetView()" title="Reset view">⟲</button>
-      <button class="grid-btn" onclick="gridResize()" title="Grid size">⊞</button>
-      <button class="grid-btn" onclick="closeGrid()">✕</button>
-    </div>
-  </div>
-  <div id="gridInitStrip"></div>
-  <canvas id="gridCanvas"></canvas>
-  <div class="grid-ftr">
-    <div id="gridHUD" style="display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap;">
-      <span id="gridTurnLabel" style="flex:1;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-      <button class="grid-btn" id="gridNextBtn" style="width:auto;padding:0 10px;font-size:12px;" onclick="gridNextTurn()">NEXT ▶</button>
-      <button class="grid-btn" id="gridShootBtn" style="width:auto;padding:0 10px;font-size:12px;" onclick="gridShoot()">⚅ SHOOT</button>
-      <button class="grid-btn" id="gridGrenBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;" onclick="gridThrowGrenade()" title="Throw a grenade">💣 NADE</button>
-      <button class="grid-btn" id="gridSheetBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;" onclick="gridOpenSheet()">📋 SHEET</button>
-      <button class="grid-btn" id="gridFitImgBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;" onclick="gridTokenImageFit()" title="Frame the token portrait">🖼</button>
-      <button class="grid-btn" id="gridRemBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;color:var(--red);" onclick="gridRemoveSelected()">✕ REM</button>
-      <button class="grid-btn" id="gridRotBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;" onclick="gridRotateSelected()">⟳ ROTATE</button>
-      <button class="grid-btn" id="gridCloneBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;" onclick="gridCloneSelected()">⧉ CLONE</button>
-      <button class="grid-btn" id="gridAimOkBtn" style="width:auto;padding:0 12px;font-size:12px;display:none;color:#7dff9b;font-weight:700;" onclick="gridAimConfirm()">✓ FIRE INTO SQUARE</button>
-      <button class="grid-btn" id="gridAimCancelBtn" style="width:auto;padding:0 10px;font-size:12px;display:none;color:var(--red);" onclick="gridAimCancel()">✕ CANCEL</button>
-      <button class="grid-btn" id="gridExitPlaceBtn" style="width:auto;padding:0 12px;font-size:12px;display:none;color:var(--amber);font-weight:700;" onclick="gridExitPlace()">✓ DONE PLACING</button>
-    </div>
-    <div id="gridInfo" style="font-size:10px;color:var(--muted);margin-top:3px;">Tap token to select · Drag to move</div>
-  </div>
-</div>
 </body>
 </html>
