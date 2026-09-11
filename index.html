@@ -5978,7 +5978,8 @@ function buildBackupData(){
     roster:roster,
     vehicles:vehicles,
     architectures:architectures,
-    tokenStyle:tokenStyle
+    tokenStyle:tokenStyle,
+    sortMode:sortMode
   };
 }
 function applyBackupData(data){
@@ -5991,6 +5992,7 @@ function applyBackupData(data){
   if(Array.isArray(data.vehicles)){ vehicles=data.vehicles; saveVehicles(); }
   if(Array.isArray(data.architectures)){ architectures=data.architectures; saveArchitectures(); }
   if(data.tokenStyle&&typeof data.tokenStyle==='object') Object.assign(tokenStyle,data.tokenStyle);
+  if(data.sortMode==='added'||data.sortMode==='init') sortMode=data.sortMode;
   save(); renderCombat(); renderNotes(); renderLog(); renderRoster(); renderVehicleList(); renderArchitectureList();
   if(document.getElementById('mapCanvasPanel').style.display!=='none') gridDraw();
 }
@@ -6103,8 +6105,19 @@ async function cloudSyncLoad(){
     }
     const result=await res.json();
     const file=result.files&&result.files['cpred-backup.json'];
-    if(!file||!file.content){ msgEl.textContent='⚠ No backup file in that gist.'; return; }
-    let data; try{ data=JSON.parse(file.content); }catch(e){ msgEl.textContent='⚠ Backup file is corrupt.'; return; }
+    if(!file){ msgEl.textContent='⚠ No backup file in that gist.'; return; }
+    let raw=file.content;
+    if(file.truncated){
+      /* GitHub's gist API only inlines up to ~1MB of file content — a backup with
+         several character portraits routinely exceeds that, so the JSON gets cut
+         off mid-object and "some things transfer, some don't". The full content
+         is always available at raw_url regardless of size. */
+      const rawRes=await fetch(file.raw_url);
+      if(!rawRes.ok){ msgEl.textContent='⚠ Backup is large — full download failed ('+rawRes.status+').'; return; }
+      raw=await rawRes.text();
+    }
+    if(!raw){ msgEl.textContent='⚠ No backup file in that gist.'; return; }
+    let data; try{ data=JSON.parse(raw); }catch(e){ msgEl.textContent='⚠ Backup file is corrupt.'; return; }
     applyBackupData(data);
     const stamp=new Date().toLocaleString();
     store.set('cpred_gist_last_sync',stamp+' (loaded from '+(data.timestamp||'?')+')');
