@@ -12,7 +12,7 @@
     --bg:#0a0a0c; --panel:#141419; --panel-2:#1c1c23; --line:#2a2a33;
     --red:#ff2b3d; --red-dim:#7a1620; --cyan:#2de2e6; --cyan-dim:#155e60;
     --amber:#ffb020; --text:#f0f0f2; --muted:#9b9ba9; --dim:#c2c2cc; --good:#3ddc84;
-    --hdr:52px; --tbar:0px;   /* sticky offsets, kept in sync by syncStickyOffsets() */
+    --hdr:52px; --tbar:0px; --nav:58px;   /* sticky offsets, kept in sync by syncStickyOffsets() */
     --mono:'SF Mono',ui-monospace,'Cascadia Mono','Roboto Mono',Menlo,Consolas,monospace;
     --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
   }
@@ -588,7 +588,7 @@
   .cp-tracker.cp-extreme{background:rgba(255,0,0,.2);border:2px solid #ff2222;color:#ff2222;}
 
   /* ---------- VTT GRID ---------- */
-  .grid-overlay{position:fixed;top:var(--hdr);bottom:0;left:0;right:0;background:var(--bg);
+  .grid-overlay{position:fixed;top:var(--hdr);bottom:var(--nav);left:0;right:0;background:var(--bg);
     z-index:15;display:none;flex-direction:column;overflow:hidden;}
   .grid-overlay.open{display:flex;}
   .map-list{flex:1 1 auto;overflow-y:auto;padding:12px 14px;display:none;}
@@ -1198,7 +1198,8 @@ const store=(()=>{ let ok=true; try{localStorage.setItem('__t','1');localStorage
   set(k,v){try{ok?localStorage.setItem(k,v):(mem[k]=v);}catch(e){mem[k]=v;}}}; })();
 function save(){ store.set('cpred_combat',JSON.stringify(combatants)); store.set('cpred_notes',JSON.stringify(notesData));
   store.set('cpred_sort',sortMode); store.set('cpred_turn',JSON.stringify({round:roundNo,activeId:activeId}));
-  store.set('cpred_log',JSON.stringify(combatLog)); store.set('cpred_tokenstyle',JSON.stringify(tokenStyle)); }
+  store.set('cpred_log',JSON.stringify(combatLog)); store.set('cpred_tokenstyle',JSON.stringify(tokenStyle));
+  store.set('cpred_theater',theaterMode?'1':'0'); }
 
 /* ============ SECURE RNG ============ */
 function randInt(max){ const maxUnbiased=Math.floor(4294967296/max)*max; const buf=new Uint32Array(1); let x;
@@ -1255,6 +1256,9 @@ function openTools(){
       toolsRow('toggleSort','⇅','Sort: <span id="sortLabel">'+(sortMode==='init'?'INIT':'ADDED')+'</span>')+
       toolsRow('clearEncounter','✕','New encounter')
     )+
+    toolsGroup('COMBAT MODE',
+      toolsRow('toggleTheaterMode','🎭','Theater of the Mind: <span id="theaterLabel">'+(theaterMode?'ON':'OFF')+'</span>')
+    )+
     toolsGroup('REFERENCE',
       toolsRow('openRange','↔','Range DV reference')+
       toolsRow('openDVReference','📋','Skill DV reference')+
@@ -1275,6 +1279,18 @@ function openTools(){
   showModal('🛠 TOOLS',html);
 }
 function toggleSimFromTools(){ document.body.classList.toggle('sim'); window.scrollTo(0,0); syncStickyOffsets(); openTools(); }
+/* Theater of the Mind: skip auto-placing combatants on the grid so range/DV
+   stays a manual entry instead of being silently measured off positions the
+   player never actually chose. Map submode still works if they open it on
+   purpose — this only changes what happens by default. */
+function toggleTheaterMode(){
+  theaterMode=!theaterMode; save();
+  const ov=document.getElementById('gridOverlay');
+  if(theaterMode&&ov&&ov.classList.contains('open')&&document.getElementById('mapCanvasPanel').style.display!=='none'){
+    setMapMode('list');
+  }
+  openTools();
+}
 function openMapTools(){
   const html=
     toolsGroup('MAP TOOLS',
@@ -1625,6 +1641,7 @@ let combatants=[]; let notesData=[]; let sortMode='added'; let combatFilter='all
 let expandedIds=new Set(); let setupOpenIds=new Set(); let roundNo=1; let activeId=null;
 let tokenStyle={shape:'circle',showPortrait:true,showName:true,hpDisplay:'bar',scale:1};
 try{ Object.assign(tokenStyle, JSON.parse(store.get('cpred_tokenstyle'))||{}); }catch(e){}
+let theaterMode=store.get('cpred_theater')==='1';
 try{ combatants=JSON.parse(store.get('cpred_combat'))||[]; }catch(e){ combatants=[]; }
 try{ notesData=JSON.parse(store.get('cpred_notes'))||[]; }catch(e){ notesData=[]; }
 if(store.get('cpred_sort')) sortMode=store.get('cpred_sort');
@@ -2017,6 +2034,8 @@ function syncStickyOffsets(){
   /* a zero measurement means we ran before layout — fall back rather than collapse the
      offset, which would let the turn bar slide under the header */
   root.setProperty('--hdr', sim?'0px':(((h&&h.offsetHeight)||52)+'px'));
+  const nv=document.querySelector('nav');
+  root.setProperty('--nav', sim?'0px':(((nv&&nv.offsetHeight)||58)+'px'));
   const tb=document.getElementById('turnBar');
   const on=!!(tb&&tb.innerHTML);
   root.setProperty('--tbar', (on?(tb.offsetHeight||62):0)+'px'); }
@@ -2157,6 +2176,63 @@ function setWeaponAmmo(cid,wid,type){ const c=find(cid); if(!c)return; const w=c
 function setWeaponBonus(cid,wid,field,val){ const c=find(cid); if(!c)return; const w=c.weapons.find(x=>x.id===wid);
   if(w){ w[field]=parseInt(val)||0; save(); } }
 function removeWeapon(cid,wid){ const c=find(cid); if(!c)return; c.weapons=c.weapons.filter(w=>w.id!==wid); save(); renderCombat(); }
+/* edit a weapon already sitting in a live combatant's inventory — previously the
+   only options were reload/unjam/remove-and-re-add-from-scratch */
+function editWeapon(cid,wid){
+  const c=find(cid); if(!c) return;
+  const w=c.weapons.find(x=>x.id===wid); if(!w) return;
+  const skillOpts=['Handgun','Shoulder Arms','Heavy Weapons','Archery','Melee Weapon','Brawling','Martial Arts','Custom']
+    .map(s=>'<option'+(s===(w.skill||'Custom')?' selected':'')+'>'+s+'</option>').join('');
+  const rangeOpts=[['','Melee / manual DV'],['Pistol','Pistol'],['SMG','SMG'],['Shotgun (Slug)','Shotgun'],
+    ['Assault Rifle','Assault Rifle'],['Sniper Rifle','Sniper Rifle'],['Bows & Crossbow','Bow / Crossbow'],
+    ['Grenade Launcher','Grenade Launcher'],['Rocket Launcher','Rocket Launcher']]
+    .map(r=>'<option value="'+r[0]+'"'+(r[0]===(w.rangeRow||'')?' selected':'')+'>'+r[1]+'</option>').join('');
+  const areaOpts=[['','None'],['shell','Shell (3d6 3×3)'],['blast','Blast (10m)']]
+    .map(r=>'<option value="'+r[0]+'"'+(r[0]===(w.areaMode||'')?' selected':'')+'>'+r[1]+'</option>').join('');
+  const qualOpts=['poor','standard','excellent']
+    .map(q=>'<option value="'+q+'"'+(q===(w.quality||'standard')?' selected':'')+'>'+q.charAt(0).toUpperCase()+q.slice(1)+'</option>').join('');
+  const html='<div style="max-height:70vh;overflow-y:auto;">'+
+    '<div class="row"><div class="field" style="flex:2;"><label class="sl">NAME</label><input id="ewN" value="'+esc(w.name)+'"></div>'+
+      '<div class="field"><label class="sl">DAMAGE</label><input id="ewDmg" value="'+esc(w.dmg)+'"></div></div>'+
+    '<div class="row"><div class="field"><label class="sl">MAG</label><input id="ewMag" type="number" inputmode="numeric" value="'+(w.baseMag!=null?w.baseMag:(w.mag!=null?w.mag:''))+'"></div>'+
+      '<div class="field"><label class="sl">ROF</label><input id="ewRof" type="number" inputmode="numeric" value="'+(w.rof||1)+'"></div>'+
+      '<div class="field"><label class="sl">RELOAD</label><input id="ewReload" type="number" inputmode="numeric" value="'+(w.reloadActions||1)+'"></div></div>'+
+    '<div class="row"><div class="field"><label class="sl">+HIT</label><input id="ewHit" type="number" inputmode="numeric" value="'+(w.hitBonus||0)+'"></div>'+
+      '<div class="field"><label class="sl">+DMG</label><input id="ewDmgB" type="number" inputmode="numeric" value="'+(w.dmgBonus||0)+'"></div>'+
+      '<div class="field"><label class="sl">IGNORE ≤</label><input id="ewIgn" type="number" inputmode="numeric" value="'+(w.ignoreBelow||'')+'"></div></div>'+
+    '<div class="row"><div class="field"><label class="sl">AUTOFIRE ×</label><input id="ewAuto" type="number" inputmode="numeric" value="'+(w.autoMult||'')+'"></div>'+
+      '<div class="field"><label class="sl">SKILL</label><select id="ewSkill">'+skillOpts+'</select></div></div>'+
+    '<div class="row"><div class="field"><label class="sl">RANGE PROFILE</label><select id="ewRange">'+rangeOpts+'</select></div></div>'+
+    '<div class="row"><div class="field"><label class="sl">AREA MODE</label><select id="ewArea">'+areaOpts+'</select></div>'+
+      '<div class="field"><label class="sl"><input type="checkbox" id="ewAP"'+(w.apDefault?' checked':'')+'> AP DEFAULT</label></div></div>'+
+    '<div class="row"><div class="field"><label class="sl">QUALITY</label><select id="ewQual">'+qualOpts+'</select></div></div>'+
+    '</div><button class="btn cyan wide" style="margin-top:10px;" id="ewSaveBtn">SAVE CHANGES</button>';
+  showModal('Edit: '+w.name,html);
+  document.getElementById('ewSaveBtn').onclick=function(){ saveWeaponEdit(cid,wid); };
+}
+function saveWeaponEdit(cid,wid){
+  const c=find(cid); if(!c) return;
+  const w=c.weapons.find(x=>x.id===wid); if(!w) return;
+  w.name=(document.getElementById('ewN').value||'').trim()||'Weapon';
+  w.dmg=(document.getElementById('ewDmg').value||'').trim()||'1d6';
+  const magV=document.getElementById('ewMag').value; w.baseMag=magV===''?null:(parseInt(magV)||null);
+  w.mag=w.baseMag;
+  w.ammo=(w.ammo==null||w.baseMag==null)?w.baseMag:Math.min(w.ammo,w.baseMag);
+  w.rof=parseInt(document.getElementById('ewRof').value)||1;
+  w.reloadActions=parseInt(document.getElementById('ewReload').value)||1;
+  w.hitBonus=parseInt(document.getElementById('ewHit').value)||0;
+  w.dmgBonus=parseInt(document.getElementById('ewDmgB').value)||0;
+  const ignV=document.getElementById('ewIgn').value; w.ignoreBelow=ignV===''?null:(parseInt(ignV)||null);
+  const autoV=document.getElementById('ewAuto').value; w.autoMult=autoV===''?null:(parseInt(autoV)||null);
+  w.skill=document.getElementById('ewSkill').value;
+  w.rangeRow=document.getElementById('ewRange').value||null;
+  w.melee=!w.rangeRow;
+  w.areaMode=document.getElementById('ewArea').value||null;
+  w.apDefault=document.getElementById('ewAP').checked;
+  w.quality=document.getElementById('ewQual').value;
+  document.getElementById('tempModal').classList.remove('open');
+  save(); renderCombat();
+}
 /* find a matching reserve entry for a weapon: match by linkedWeapons ID, then ammo type */
 const AMMOTYPE_TO_TRACKER={basic:'Basic',ap:'AP',rubber:'Rubber',incendiary:'Incendiary',
   expansive:'Expansive',smart:'Smart',poison:'Poison',biotoxin:'Biotox',sleep:'Sleep',
@@ -2228,7 +2304,10 @@ function currentWeapon(){ const s=find(shoot.shooterId);
   return s.weapons[shoot.wi]; }
 function openShoot(id,opts){ const s=find(id); if(!s)return;
   opts=opts||{};
-  shoot={shooterId:id,wi:opts.tempWeapon?0:(opts.wi||0),targetId:opts.targetId||null,range:'',mod:0,loc:'body',armorMode:'full',ablate:1,ignoreBelow:null,
+  /* default to whatever this combatant last actually fired, not weapon #1 —
+     but only if it's still a valid index (weapons can be removed/reordered) */
+  const lastWi=(s.lastWeaponIdx!=null&&s.weapons&&s.lastWeaponIdx<s.weapons.length)?s.lastWeaponIdx:0;
+  shoot={shooterId:id,wi:opts.tempWeapon?0:(opts.wi!=null?opts.wi:lastWi),targetId:opts.targetId||null,range:'',mod:0,loc:'body',armorMode:'full',ablate:1,ignoreBelow:null,
     dv:null,hit:null,aimedHead:false,aimType:'normal',shotsUsed:0,fireMode:'single',margin:0,targetIds:[],suppressDV:null,multiIds:[],smartUsed:false,
     defence:'dv',dodgedIds:[],blastAtk:null,_tempWeapon:opts.tempWeapon||null,_prefTargetId:opts.targetId||null,
     _fromMap:!!opts.fromMap,_prefFireMode:opts.fireMode||null,_prefMulti:opts.multiIds||null,_prefRange:(opts.range!=null?opts.range:null),_blastCenter:opts.blastCenter||null};
@@ -2717,6 +2796,7 @@ function rollAttack(){ const w=currentWeapon(); const s=find(shoot.shooterId); c
   if(w.mag!=null){ if(w.ammo<cost){ res.innerHTML='<div class="warn">'+(cost>1
       ? esc(w.name)+' needs 10 rounds in the clip — only '+w.ammo+' left.'
       : 'Click — '+esc(w.name)+' is empty. Reload it in inventory.')+'</div>'; return; } w.ammo-=cost; }
+  s.lastWeaponIdx=shoot.wi; /* remember what they actually fired, so the next ATTACK opens on it instead of weapon #1 */
   if(fm==='suppress'){ return rollSuppression(w,s,res); }
   const wpnHit=w.hitBonus||0;
   let cnBonus=0;
@@ -3336,6 +3416,7 @@ function cardHtml(c){ const pct=Math.max(0,Math.min(100,Math.round(c.hp/c.hpMax*
         '<div class="iw-ammo">'+ammoLabel(w,c)+(w.reloading?'<br><span style="color:var(--amber);">⏳ '+(((w.reloadActions||1)-w.reloading)+1)+'/'+(w.reloadActions||1)+'</span>':'')+'</div>'+
         unjamBtn+
         '<button class="mini-btn" onclick="'+(w.reloading?'cancelReload':'reloadWeapon')+'(\''+c.id+'\',\''+w.id+'\')"'+(w.mag==null?' disabled':'')+'>'+(w.reloading?'✕RLD':'RLD')+'</button>'+
+        '<button class="mini-btn" onclick="editWeapon(\''+c.id+'\',\''+w.id+'\')" title="Edit">✎</button>'+
         '<button class="mini-btn x" onclick="removeWeapon(\''+c.id+'\',\''+w.id+'\')">✕</button></div>'+
         (w.melee?'':'<div class="wbonus" style="margin-bottom:4px;"><div class="wb" style="flex:1;"><label>AMMO</label>'+
           '<select onchange="setWeaponAmmo(\''+c.id+'\',\''+w.id+'\',this.value)">'+
@@ -5979,7 +6060,8 @@ function buildBackupData(){
     vehicles:vehicles,
     architectures:architectures,
     tokenStyle:tokenStyle,
-    sortMode:sortMode
+    sortMode:sortMode,
+    theaterMode:theaterMode
   };
 }
 function applyBackupData(data){
@@ -5993,6 +6075,7 @@ function applyBackupData(data){
   if(Array.isArray(data.architectures)){ architectures=data.architectures; saveArchitectures(); }
   if(data.tokenStyle&&typeof data.tokenStyle==='object') Object.assign(tokenStyle,data.tokenStyle);
   if(data.sortMode==='added'||data.sortMode==='init') sortMode=data.sortMode;
+  if(typeof data.theaterMode==='boolean') theaterMode=data.theaterMode;
   save(); renderCombat(); renderNotes(); renderLog(); renderRoster(); renderVehicleList(); renderArchitectureList();
   if(document.getElementById('mapCanvasPanel').style.display!=='none') gridDraw();
 }
@@ -8250,13 +8333,16 @@ if(window.visualViewport) window.visualViewport.addEventListener('resize',gridOn
 function openGrid(){
   const ov=document.getElementById('gridOverlay');
   ov.classList.add('open');
-  gridAutoPlace(); /* place tokens now — rAF may not fire if the pane is backgrounded */
+  /* Theater of the Mind: don't silently place combatants on a grid the player
+     never asked to use — setMapMode('map') still places them the moment the
+     player explicitly opens the map view. */
+  if(!theaterMode) gridAutoPlace(); /* place tokens now — rAF may not fire if the pane is backgrounded */
   const cv=document.getElementById('gridCanvas');
   gridBindEvents(cv);
   /* size canvas AFTER the overlay is visible so offsetWidth/Height are non-zero */
   requestAnimationFrame(()=>{
     gridFitCanvas();
-    gridAutoPlace();
+    if(!theaterMode) gridAutoPlace();
     gridResetView();
   });
   /* second pass — some layouts (fullscreen, mobile chrome) settle a frame later */
@@ -9431,13 +9517,29 @@ function gridDrawSprite(ctx,sx,sy,sw,sh,c,n,seed){
   else { gridSpriteGeneric(ctx,sx,sy,sw,sh,c,n); }
 }
 
+/* Keeps zoom/pan inside sane bounds no matter what touch math produced them —
+   a stale/leaked pointer during a pinch gesture (iOS in particular can drop a
+   pointerup mid-gesture) can otherwise send G.zoom or G.ox/G.oy to extreme
+   values in one frame, which reads as the map view "flying off into the void".
+   Called on every draw so any bad value self-corrects on the next frame. */
+function gridClampView(w,h){
+  if(!(w>0)||!(h>0)) return;
+  G.zoom=Math.max(0.15,Math.min(5,G.zoom||1));
+  const c=G.cell*G.zoom;
+  const totalW=G.cols*c, totalH=G.rows*c;
+  const minVisible=Math.min(60,totalW,totalH,w,h);
+  G.ox=Math.max(minVisible-totalW,Math.min(w-minVisible,G.ox||0));
+  G.oy=Math.max(minVisible-totalH,Math.min(h-minVisible,G.oy||0));
+}
 function gridDraw(){
   const cv=document.getElementById('gridCanvas');
   if(!cv) return;
   const ctx=cv.getContext('2d');
   const w=cv.offsetWidth, h=cv.offsetHeight;
+  if(!(w>0)||!(h>0)) return; /* canvas not sized yet */
+  gridClampView(w,h);
   const c=G.cell*G.zoom;
-  if(!(w>0)||!(h>0)||!(c>0)) return; /* canvas not sized yet */
+  if(!(c>0)) return;
   ctx.clearRect(0,0,w,h);
 
   /* floor tiles — subtle checkerboard */
@@ -10053,8 +10155,14 @@ function gridPtrXY(e){
 function gridPDown(e){
   e.preventDefault();
   const cv=document.getElementById('gridCanvas');
-  cv.setPointerCapture(e.pointerId);
-  G.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  try{ cv.setPointerCapture(e.pointerId); }catch(err){}
+  /* drop any pointer we haven't heard from in a while before counting fingers —
+     iOS in particular can drop a pointerup mid-gesture (a system gesture stealing
+     it, e.g.), which otherwise leaves a "ghost" finger that turns the next real
+     touch into a bogus pinch against a point that never moves */
+  const now=Date.now();
+  G.pointers.forEach((pt,id)=>{ if(id!==e.pointerId&&now-pt.t>1500) G.pointers.delete(id); });
+  G.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,t:now});
 
   /* pinch start */
   if(G.pointers.size===2){
@@ -10109,7 +10217,8 @@ function gridPDown(e){
 
 function gridPMove(e){
   e.preventDefault();
-  G.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(!G.pointers.has(e.pointerId)) return; /* move for a pointer we never saw go down (or already cleaned up as stale) */
+  G.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,t:Date.now()});
 
   /* pinch zoom */
   if(G.pointers.size===2){
@@ -10219,9 +10328,19 @@ function gridPMove(e){
 function gridPUp(e){
   e.preventDefault();
   const cv=document.getElementById('gridCanvas');
-  cv.releasePointerCapture(e.pointerId);
+  try{ cv.releasePointerCapture(e.pointerId); }catch(err){}
   G.pointers.delete(e.pointerId);
   cv.style.cursor='grab';
+
+  /* a pinch just ended (one finger lifted, one still down) — resume single-finger
+     panning from here instead of leaving that finger dead until it lifts too */
+  if(G.pointers.size===1&&!G.drag&&!G.aim&&!G.coverStart){
+    const remaining=[...G.pointers.values()][0];
+    const r=cv.getBoundingClientRect();
+    G.panning=true; G.panSX=remaining.x-r.left; G.panSY=remaining.y-r.top;
+    G.panOX0=G.ox; G.panOY0=G.oy; G.pinchD0=0;
+    return;
+  }
 
   if(G.aim&&G.aim.mode==='shot'){
     const cand=G.shotCand; G.shotCand=null;
@@ -11614,6 +11733,7 @@ function gridCleanDo(mode){
 setSide('enemy');
 renderTimeline(); renderCombat(); renderNotes(); renderLog(); renderRoster(); renderVehicleList(); renderArchitectureList(); calcRefresh(); syncStickyOffsets();
 showMapTab(document.querySelector('nav button'));
+if(theaterMode) setMapMode('list');
 </script>
 </body>
 </html>
