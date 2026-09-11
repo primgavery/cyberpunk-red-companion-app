@@ -839,8 +839,6 @@
 <div id="device">
 <header>
   <div class="logo"><span class="r">RED</span> <span class="slash">//</span> COMPANION</div>
-  <button class="simtoggle" onclick="toggleSim(this)">▢ MOBILE VIEW</button>
-  <div class="rng-tag">SECURE RNG</div>
   <button class="grid-btn" style="margin-left:auto;" onclick="openTools()" title="Tools">🛠</button>
   <button class="grid-btn" onclick="openCloudSync()" title="Cloud sync">☁</button>
 </header>
@@ -1126,21 +1124,14 @@
 
 <div id="gridOverlay" class="grid-overlay">
   <div class="grid-hdr">
-    <span class="grid-title">🗺 BATTLE MAP</span>
     <div class="grid-tools">
       <button class="grid-btn active" id="mapModeMapBtn" onclick="setMapMode('map')" title="Map view">🗺</button>
       <button class="grid-btn" id="mapModeListBtn" onclick="setMapMode('list')" title="List view">☰</button>
-      <div id="mapCanvasTools" style="display:flex;gap:6px;flex-wrap:wrap;">
-        <button class="grid-btn" onclick="openTokenStyle()" title="Token style">⚙</button>
-        <button class="grid-btn" id="gridMeasBtn" onclick="gridToggleMeasure()" title="Measure">📏</button>
+      <div id="mapCanvasTools" style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;">
         <button class="grid-btn active" id="gridReachBtn" onclick="gridToggleReach()" title="Show Move / Run reach">🥾</button>
         <button class="grid-btn active" id="gridLOSBtn" onclick="gridToggleLOS()" title="Line-of-sight preview">👁</button>
-        <button class="grid-btn" onclick="gridAddCover()" title="Object library">📦</button>
-        <button class="grid-btn" onclick="gridFloorPicker()" title="Floor paint">🎨</button>
-        <button class="grid-btn" onclick="gridPresets()" title="Encounter maps">🗺</button>
-        <button class="grid-btn" onclick="gridCleanMenu()" title="Clear map">🧹</button>
-        <button class="grid-btn" onclick="gridResetView()" title="Reset view">⟲</button>
-        <button class="grid-btn" onclick="gridResize()" title="Grid size">⊞</button>
+        <button class="grid-btn" onclick="openTokenStyle()" title="Token style">⚙</button>
+        <button class="grid-btn" onclick="openMapTools()" title="Map tools">⋯</button>
       </div>
     </div>
   </div>
@@ -1254,34 +1245,49 @@ function setDiceMode(mode){
 function goCalc(){ showView('calc',null); }
 function goNotes(){ showView('notes',null); }
 function runToolModal(fn){ document.getElementById('tempModal').classList.remove('open'); if(typeof fn==='function') fn(); }
+function toolsGroup(title,rows){ return '<div class="tools-group">'+title+'</div><div>'+rows+'</div>'; }
+function toolsRow(fnName,icon,label){ return '<div class="tools-row" onclick="runToolModal('+fnName+')"><span class="tools-ic">'+icon+'</span><span style="flex:1;">'+label+'</span><span class="tools-chev">›</span></div>'; }
 function openTools(){
-  const group=(title,rows)=>'<div class="tools-group">'+title+'</div><div>'+rows+'</div>';
-  const row=(fnName,icon,label)=>'<div class="tools-row" onclick="runToolModal('+fnName+')"><span class="tools-ic">'+icon+'</span><span style="flex:1;">'+label+'</span><span class="tools-chev">›</span></div>';
   const html=
-    group('ENCOUNTER SETUP',
-      row('openRosterPick','◉','Roster picker')+
-      row('openLibrary','☰','NPC library')+
-      row('toggleSort','⇅','Sort: <span id="sortLabel">'+(sortMode==='init'?'INIT':'ADDED')+'</span>')+
-      row('clearEncounter','✕','New encounter')
+    toolsGroup('ENCOUNTER SETUP',
+      toolsRow('openRosterPick','◉','Roster picker')+
+      toolsRow('openLibrary','☰','NPC library')+
+      toolsRow('toggleSort','⇅','Sort: <span id="sortLabel">'+(sortMode==='init'?'INIT':'ADDED')+'</span>')+
+      toolsRow('clearEncounter','✕','New encounter')
     )+
-    group('REFERENCE',
-      row('openRange','↔','Range DV reference')+
-      row('openDVReference','📋','Skill DV reference')+
-      row('openVehicleCombatTools','🚗','Vehicle combat tools')
+    toolsGroup('REFERENCE',
+      toolsRow('openRange','↔','Range DV reference')+
+      toolsRow('openDVReference','📋','Skill DV reference')+
+      toolsRow('openVehicleCombatTools','🚗','Vehicle combat tools')
     )+
-    group('DATA',
-      row('openSaveLoad','⇅','Save / Load')+
-      row('downloadFullBackup','💾','Full backup')+
-      row('openCloudSync','☁','Cloud sync')
+    toolsGroup('DATA',
+      toolsRow('openSaveLoad','⇅','Save / Load')+
+      toolsRow('downloadFullBackup','💾','Full backup')+
+      toolsRow('openCloudSync','☁','Cloud sync')
     )+
-    group('UTILITIES',
-      row('goCalc','▦','Calculator')+
-      row('goNotes','✎','Notes')
+    toolsGroup('UTILITIES',
+      toolsRow('goCalc','▦','Calculator')+
+      toolsRow('goNotes','✎','Notes')
+    )+
+    toolsGroup('DISPLAY',
+      toolsRow('toggleSimFromTools','▢','Mobile view: <span id="simLabel">'+(document.body.classList.contains('sim')?'ON':'OFF')+'</span>')
     );
   showModal('🛠 TOOLS',html);
 }
-function toggleSim(btn){ document.body.classList.toggle('sim'); const on=document.body.classList.contains('sim');
-  btn.textContent=on?'▢ EXIT MOBILE':'▢ MOBILE VIEW'; window.scrollTo(0,0); syncStickyOffsets(); }
+function toggleSimFromTools(){ document.body.classList.toggle('sim'); window.scrollTo(0,0); syncStickyOffsets(); openTools(); }
+function openMapTools(){
+  const html=
+    toolsGroup('MAP TOOLS',
+      toolsRow('gridToggleMeasure','📏','Measure')+
+      toolsRow('gridAddCover','📦','Object library')+
+      toolsRow('gridFloorPicker','🎨','Floor paint')+
+      toolsRow('gridPresets','🗺','Encounter maps')+
+      toolsRow('gridCleanMenu','🧹','Clear map')+
+      toolsRow('gridResetView','⟲','Reset view')+
+      toolsRow('gridResize','⊞','Grid size')
+    );
+  showModal('🗺 MAP TOOLS',html);
+}
 
 /* ============ DICE TAB ============ */
 let rollLog=[], diceMod=0, explodeD10=false;
