@@ -5142,6 +5142,9 @@ let csReadOnly=false;
 let csCurrentPage='roles';
 function csShowPage(page,btn){
   csCurrentPage=page;
+  /* remember per-character so reopening (or flipping between characters) lands
+     back where you left off instead of always resetting to ROLES */
+  if(csEditId){ const c=rosterFind(csEditId); if(c&&c.lastPage!==page){ c.lastPage=page; saveRoster(); } }
   document.querySelectorAll('.cs-page').forEach(p=>p.classList.remove('active'));
   const target=document.getElementById('csPage_'+page);
   if(target) target.classList.add('active');
@@ -5645,7 +5648,7 @@ function renderVehicleList(){
     return;
   }
   el.innerHTML=vehicles.map(v=>{
-    const upgList=v.upgrades.length?v.upgrades.join(', '):'stock';
+    const upgList=(v.upgrades&&v.upgrades.length)?v.upgrades.join(', '):'stock';
     return '<div class="v-card">'+
       '<div class="v-head"><div class="v-name">'+esc(v.name||v.type)+'</div>'+
         '<span class="v-type">'+esc(v.type||'Custom')+'</span></div>'+
@@ -6070,14 +6073,35 @@ function applyBackupData(data){
   if(data.round) roundNo=data.round;
   if(data.activeId!==undefined) activeId=data.activeId;
   if(Array.isArray(data.log)) combatLog=data.log;
-  if(Array.isArray(data.roster)){ roster=data.roster; saveRoster(); }
-  if(Array.isArray(data.vehicles)){ vehicles=data.vehicles; saveVehicles(); }
-  if(Array.isArray(data.architectures)){ architectures=data.architectures; saveArchitectures(); }
+  /* backfill fields the render functions assume exist as arrays — a backup made
+     by an older version of the app (before a field existed) shouldn't be able
+     to crash the restore partway through and leave the rest of the load undone */
+  if(Array.isArray(data.roster)){
+    roster=data.roster;
+    roster.forEach(c=>{ if(!Array.isArray(c.weapons))c.weapons=[]; if(!c.stats||typeof c.stats!=='object')c.stats={}; });
+    saveRoster();
+  }
+  if(Array.isArray(data.vehicles)){
+    vehicles=data.vehicles;
+    vehicles.forEach(v=>{ if(!Array.isArray(v.upgrades))v.upgrades=[]; if(!Array.isArray(v.mountedWeapons))v.mountedWeapons=[]; });
+    saveVehicles();
+  }
+  if(Array.isArray(data.architectures)){
+    architectures=data.architectures;
+    architectures.forEach(a=>{ if(!Array.isArray(a.floors))a.floors=[]; });
+    saveArchitectures();
+  }
   if(data.tokenStyle&&typeof data.tokenStyle==='object') Object.assign(tokenStyle,data.tokenStyle);
   if(data.sortMode==='added'||data.sortMode==='init') sortMode=data.sortMode;
   if(typeof data.theaterMode==='boolean') theaterMode=data.theaterMode;
-  save(); renderCombat(); renderNotes(); renderLog(); renderRoster(); renderVehicleList(); renderArchitectureList();
-  if(document.getElementById('mapCanvasPanel').style.display!=='none') gridDraw();
+  /* the data is fully restored and saved to disk above — everything past this
+     point is just refreshing what's on screen, so a render hiccup (an
+     unexpected shape somewhere we didn't anticipate) must never make the
+     caller think the restore itself failed and the data is gone */
+  save();
+  try{ renderCombat(); renderNotes(); renderLog(); renderRoster(); renderVehicleList(); renderArchitectureList();
+    if(document.getElementById('mapCanvasPanel').style.display!=='none') gridDraw();
+  }catch(renderErr){ console.error('applyBackupData: restore succeeded but a render step failed',renderErr); }
 }
 
 function openCloudSync(){
@@ -6207,7 +6231,7 @@ async function cloudSyncLoad(){
     msgEl.textContent='✓ Loaded backup from '+(data.timestamp||'gist');
     toast('Loaded from gist ✓');
   } catch(e){
-    msgEl.textContent='⚠ Network error: '+e.message;
+    msgEl.textContent='⚠ Load failed: '+e.message;
   }
 }
 
@@ -7278,6 +7302,12 @@ function openCharSheet(id,startReadOnly){
   /* show export button only for existing characters */
   const expBtn=document.getElementById('csExportBtn');
   if(expBtn) expBtn.style.display=c?'':'none';
+  /* land on whichever page this character was last left on, not always ROLES —
+     the sheet markup above always builds with ROLES active, so switch after.
+     Always call this (even when the target is 'roles') so csCurrentPage never
+     stays stale from whatever character's sheet was open before this one. */
+  const startPage=(d&&d.lastPage&&['roles','stats','inv','cyber','archive'].includes(d.lastPage))?d.lastPage:'roles';
+  csShowPage(startPage,null);
 }
 function applyCSMode(isExisting){
   const body=document.getElementById('csBody');
