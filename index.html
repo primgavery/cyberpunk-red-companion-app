@@ -927,6 +927,17 @@
     <div id="rosterList"></div>
     <div style="margin-top:24px;border-top:1px solid var(--line);padding-top:16px;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <h2 style="margin:0;flex:1;">💰 GIGS</h2>
+        <button class="btn ghost sm" onclick="openGigForm()">+ NEW GIG</button>
+      </div>
+      <div id="gigList"></div>
+      <details id="gigDoneWrap" style="margin-top:10px;">
+        <summary style="cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:1px;padding:6px 2px;">COMPLETED (<span id="gigDoneCount">0</span>)</summary>
+        <div id="gigDoneList" style="margin-top:8px;"></div>
+      </details>
+    </div>
+    <div style="margin-top:24px;border-top:1px solid var(--line);padding-top:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <h2 style="margin:0;flex:1;">VEHICLES</h2>
         <button class="btn ghost sm" onclick="openVehicleSheet()">+ NEW VEHICLE</button>
       </div>
@@ -6062,6 +6073,7 @@ function buildBackupData(){
     roster:roster,
     vehicles:vehicles,
     architectures:architectures,
+    gigs:gigs,
     tokenStyle:tokenStyle,
     sortMode:sortMode,
     theaterMode:theaterMode
@@ -6091,6 +6103,11 @@ function applyBackupData(data){
     architectures.forEach(a=>{ if(!Array.isArray(a.floors))a.floors=[]; });
     saveArchitectures();
   }
+  if(Array.isArray(data.gigs)){
+    gigs=data.gigs;
+    gigs.forEach(g=>{ if(!Array.isArray(g.participants))g.participants=[]; if(g.status!=='done')g.status='active'; });
+    saveGigs();
+  }
   if(data.tokenStyle&&typeof data.tokenStyle==='object') Object.assign(tokenStyle,data.tokenStyle);
   if(data.sortMode==='added'||data.sortMode==='init') sortMode=data.sortMode;
   if(typeof data.theaterMode==='boolean') theaterMode=data.theaterMode;
@@ -6099,7 +6116,7 @@ function applyBackupData(data){
      unexpected shape somewhere we didn't anticipate) must never make the
      caller think the restore itself failed and the data is gone */
   save();
-  try{ renderCombat(); renderNotes(); renderLog(); renderRoster(); renderVehicleList(); renderArchitectureList();
+  try{ renderCombat(); renderNotes(); renderLog(); renderRoster(); renderGigsList(); renderVehicleList(); renderArchitectureList();
     if(document.getElementById('mapCanvasPanel').style.display!=='none') gridDraw();
   }catch(renderErr){ console.error('applyBackupData: restore succeeded but a render step failed',renderErr); }
 }
@@ -6247,6 +6264,88 @@ function vsExportVehicle(){
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
   toast('Exported '+v.name);
+}
+
+/* ================ GIGS ================
+   A shared job log — one entry can list several participants (the "gig
+   linking" ask: two characters who always run together get one gig entry
+   instead of each having to log it separately) with a plain active/done
+   status so finished jobs stay in a collapsed history instead of vanishing. */
+let gigs=[];
+try{ gigs=JSON.parse(store.get('cpred_gigs')||'[]'); }catch(e){ gigs=[]; }
+function saveGigs(){ store.set('cpred_gigs',JSON.stringify(gigs)); }
+function gigFind(id){ return gigs.find(g=>g.id===id); }
+let gigEditId=null;
+function openGigForm(id){
+  gigEditId=id||null;
+  const g=id?gigFind(id):null;
+  const d=g||{name:'',fixer:'',payout:'',notes:'',participants:[]};
+  const checks=roster.map(c=>
+    '<label class="cover-toggle" style="display:flex;align-items:center;gap:8px;padding:4px 0;">'+
+      '<input type="checkbox" class="gig-part" value="'+c.id+'"'+(d.participants.includes(c.id)?' checked':'')+'> '+esc(c.name)+
+    '</label>').join('')||'<div class="hint">No characters yet — add one first.</div>';
+  const html=
+    '<div class="row"><div class="field" style="flex:2;"><label class="sl">GIG NAME</label><input id="gigName" value="'+esc(d.name)+'" placeholder="Milk Run for Wakako"></div>'+
+      '<div class="field"><label class="sl">PAYOUT</label><input id="gigPayout" value="'+esc(d.payout)+'" placeholder="500eb"></div></div>'+
+    '<div class="field" style="margin-bottom:10px;"><label class="sl">FIXER / CLIENT</label><input id="gigFixer" value="'+esc(d.fixer)+'" placeholder="Wakako Okada"></div>'+
+    '<div class="field" style="margin-bottom:10px;"><label class="sl">NOTES</label><textarea id="gigNotes" placeholder="job details, complications…">'+esc(d.notes)+'</textarea></div>'+
+    '<div class="sl" style="margin-bottom:6px;">PARTICIPANTS</div>'+
+    '<div style="margin-bottom:14px;">'+checks+'</div>'+
+    '<button class="btn cyan wide" id="gigSaveBtn">'+(g?'SAVE CHANGES':'ADD GIG')+'</button>';
+  showModal(g?'Edit Gig':'+ New Gig',html);
+  document.getElementById('gigSaveBtn').onclick=saveGig;
+}
+function saveGig(){
+  const name=(document.getElementById('gigName').value||'').trim()||'Unnamed Gig';
+  const payout=(document.getElementById('gigPayout').value||'').trim();
+  const fixer=(document.getElementById('gigFixer').value||'').trim();
+  const notes=(document.getElementById('gigNotes').value||'').trim();
+  const participants=[...document.querySelectorAll('.gig-part:checked')].map(el=>el.value);
+  if(gigEditId){
+    const g=gigFind(gigEditId);
+    if(g) Object.assign(g,{name,payout,fixer,notes,participants});
+  } else {
+    gigs.push({id:uid(),name,payout,fixer,notes,participants,status:'active',
+      created:new Date().toISOString(),completed:null});
+  }
+  saveGigs(); renderGigsList();
+  document.getElementById('tempModal').classList.remove('open');
+}
+function toggleGigStatus(id){
+  const g=gigFind(id); if(!g) return;
+  g.status=g.status==='done'?'active':'done';
+  g.completed=g.status==='done'?new Date().toISOString():null;
+  saveGigs(); renderGigsList();
+}
+function deleteGig(id){
+  gigs=gigs.filter(g=>g.id!==id);
+  saveGigs(); renderGigsList();
+}
+function gigCardHtml(g){
+  const names=g.participants.map(pid=>{ const c=rosterFind(pid); return c?esc(c.name):null; }).filter(Boolean);
+  const who=names.length?names.join(', '):'no one assigned';
+  const done=g.status==='done';
+  return '<div class="na-card"'+(done?' style="opacity:.7;"':'')+'>'+
+    '<div class="na-head"><div class="na-name">'+esc(g.name)+'</div>'+
+      (g.payout?'<span class="na-diff">'+esc(g.payout)+'</span>':'')+'</div>'+
+    '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px;">'+
+      (g.fixer?'Fixer: '+esc(g.fixer)+' · ':'')+who+
+      (g.notes?'<br>'+esc(g.notes):'')+'</div>'+
+    '<div class="r-actions">'+
+      '<button class="r-edit" onclick="openGigForm(\''+g.id+'\')">✎ EDIT</button>'+
+      '<button class="'+(done?'r-add':'r-edit')+'" onclick="toggleGigStatus(\''+g.id+'\')">'+(done?'↺ REOPEN':'✓ COMPLETE')+'</button>'+
+      '<button class="r-del" onclick="deleteGig(\''+g.id+'\')">✕</button></div></div>';
+}
+function renderGigsList(){
+  const active=gigs.filter(g=>g.status!=='done');
+  const done=gigs.filter(g=>g.status==='done');
+  const el=document.getElementById('gigList'); if(!el) return;
+  el.innerHTML=active.length?active.map(gigCardHtml).join(''):
+    '<div class="empty-state">No active gigs.<br>A gig you add here shows up for every character checked on it — no need to log the same job twice.</div>';
+  const doneEl=document.getElementById('gigDoneList');
+  if(doneEl) doneEl.innerHTML=done.length?done.map(gigCardHtml).join(''):'<div class="hint">Nothing completed yet.</div>';
+  const cntEl=document.getElementById('gigDoneCount');
+  if(cntEl) cntEl.textContent=done.length;
 }
 
 /* ================ NET ARCHITECTURE SYSTEM ================ */
@@ -7961,7 +8060,7 @@ function loadRosterFromFile(ev){ const f=ev.target.files&&ev.target.files[0]; if
 /* ---- also include roster in the encounter save/load ---- */
 const _origOpenSaveLoad=openSaveLoad;
 openSaveLoad=function(){
-  document.getElementById('saveText').value=JSON.stringify({app:'cpred',v:6,combatants,notes:notesData,round:roundNo,activeId:activeId,log:combatLog,roster:roster,vehicles:vehicles,architectures:architectures},null,1);
+  document.getElementById('saveText').value=JSON.stringify({app:'cpred',v:6,combatants,notes:notesData,round:roundNo,activeId:activeId,log:combatLog,roster:roster,vehicles:vehicles,architectures:architectures,gigs:gigs},null,1);
   document.getElementById('loadText').value=''; document.getElementById('saveMsg').textContent=''; document.getElementById('loadMsg').textContent='';
   document.getElementById('saveModal').classList.add('open');
 };
@@ -8002,6 +8101,14 @@ applyLoad=function(txt,msgEl){
     data.architectures.forEach(a=>{ if(!a.name||existing.has(a.name.toLowerCase()))return;
       if(!a.id)a.id=uid(); architectures.push(a); existing.add(a.name.toLowerCase()); });
     saveArchitectures(); renderArchitectureList();
+  }
+  /* if the file also carried gigs, merge them in */
+  if(data&&Array.isArray(data.gigs)&&data.gigs.length){
+    const existing=new Set(gigs.map(g=>(g.name||'').toLowerCase()));
+    data.gigs.forEach(g=>{ if(!g.name||existing.has(g.name.toLowerCase()))return;
+      if(!g.id)g.id=uid(); if(!Array.isArray(g.participants))g.participants=[]; if(g.status!=='done')g.status='active';
+      gigs.push(g); existing.add(g.name.toLowerCase()); });
+    saveGigs(); renderGigsList();
   }
   expandedIds=new Set(); save(); renderCombat(); closeSaveLoad();
 };
@@ -11761,7 +11868,7 @@ function gridCleanDo(mode){
 
 /* ============ INIT ============ */
 setSide('enemy');
-renderTimeline(); renderCombat(); renderNotes(); renderLog(); renderRoster(); renderVehicleList(); renderArchitectureList(); calcRefresh(); syncStickyOffsets();
+renderTimeline(); renderCombat(); renderNotes(); renderLog(); renderRoster(); renderGigsList(); renderVehicleList(); renderArchitectureList(); calcRefresh(); syncStickyOffsets();
 showMapTab(document.querySelector('nav button'));
 if(theaterMode) setMapMode('list');
 </script>
