@@ -6141,6 +6141,7 @@ function cloudSyncModalOpen(){
   return !!(m&&m.classList.contains('open')&&t&&t.textContent.indexOf('CLOUD SYNC')!==-1);
 }
 function setGistSyncState(state){
+  const prev=gistSyncState;
   gistSyncState=state;
   const dot=document.getElementById('gistStatusDot');
   if(dot){
@@ -6148,7 +6149,18 @@ function setGistSyncState(state){
     dot.style.background=colors[state]||'transparent';
     dot.style.display=(state==='idle')?'none':'block';
   }
-  if(cloudSyncModalOpen()) openCloudSync(); /* refresh the open modal to reflect the new state */
+  if(!cloudSyncModalOpen()) return;
+  /* the conflict banner changes which buttons are even on screen, so that
+     transition needs a full rebuild — every other state change is just the
+     one-line label, which we can update in place without disturbing whatever
+     the caller is about to write into #cloudSyncMsg right after this call */
+  if((prev==='conflict')!==(state==='conflict')){ openCloudSync(); return; }
+  const lbl=document.getElementById('gistStateLabel');
+  if(lbl){
+    lbl.textContent=gistStateLabel();
+    lbl.style.color=(state==='conflict'||state==='error')?'var(--amber)':'var(--cyan)';
+    lbl.style.display=gistStateLabel()?'':'none';
+  }
 }
 function gistStateLabel(){
   return {idle:'',syncing:'Syncing…',synced:'✓ Up to date',conflict:'⚠ Paused — cloud has newer changes',error:'⚠ Last attempt failed'}[gistSyncState]||'';
@@ -6188,7 +6200,7 @@ function openCloudSync(){
       (autoSyncEnabled?'Pushes changes in the background a few seconds after you make them.':'Off — use SYNC TO GIST below manually.')+
     '</div>'+
 
-    (stateLabel?'<div style="font-family:var(--mono);font-size:11px;margin-bottom:8px;color:'+(gistSyncState==='conflict'||gistSyncState==='error'?'var(--amber)':'var(--cyan)')+';">'+stateLabel+'</div>':'')+
+    '<div id="gistStateLabel" style="font-family:var(--mono);font-size:11px;margin-bottom:8px;display:'+(stateLabel?'':'none')+';color:'+(gistSyncState==='conflict'||gistSyncState==='error'?'var(--amber)':'var(--cyan)')+';">'+stateLabel+'</div>'+
     (lastSync?'<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:10px;">Last sync: '+esc(lastSync)+'</div>':'')+
 
     (gistSyncState==='conflict'?
