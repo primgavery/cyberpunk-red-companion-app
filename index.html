@@ -840,7 +840,7 @@
 <header>
   <div class="logo"><span class="r">RED</span> <span class="slash">//</span> COMPANION</div>
   <button class="grid-btn" style="margin-left:auto;" onclick="openTools()" title="Tools">🛠</button>
-  <button class="grid-btn" onclick="openCloudSync()" title="Cloud sync">☁</button>
+  <button class="grid-btn" style="position:relative;" onclick="openCloudSync()" title="Cloud sync">☁<span id="gistStatusDot" style="display:none;position:absolute;top:3px;right:3px;width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 0 2px var(--panel-2);"></span></button>
 </header>
 
 <main>
@@ -1207,10 +1207,11 @@
 const store=(()=>{ let ok=true; try{localStorage.setItem('__t','1');localStorage.removeItem('__t');}catch(e){ok=false;}
   const mem={}; return {get(k){try{return ok?localStorage.getItem(k):(mem[k]??null);}catch(e){return mem[k]??null;}},
   set(k,v){try{ok?localStorage.setItem(k,v):(mem[k]=v);}catch(e){mem[k]=v;}}}; })();
-function save(){ store.set('cpred_combat',JSON.stringify(combatants)); store.set('cpred_notes',JSON.stringify(notesData));
+function save(skipAutoSync){ store.set('cpred_combat',JSON.stringify(combatants)); store.set('cpred_notes',JSON.stringify(notesData));
   store.set('cpred_sort',sortMode); store.set('cpred_turn',JSON.stringify({round:roundNo,activeId:activeId}));
   store.set('cpred_log',JSON.stringify(combatLog)); store.set('cpred_tokenstyle',JSON.stringify(tokenStyle));
-  store.set('cpred_theater',theaterMode?'1':'0'); }
+  store.set('cpred_theater',theaterMode?'1':'0');
+  if(!skipAutoSync) scheduleAutoSync(); }
 
 /* ============ SECURE RNG ============ */
 function randInt(max){ const maxUnbiased=Math.floor(4294967296/max)*max; const buf=new Uint32Array(1); let x;
@@ -5125,7 +5126,7 @@ function csRollSkill(skillName,statKey,level,misc){
 
 let roster=[];
 try{ roster=JSON.parse(store.get('cpred_roster'))||[]; }catch(e){ roster=[]; }
-function saveRoster(){ store.set('cpred_roster',JSON.stringify(roster)); }
+function saveRoster(skipAutoSync){ store.set('cpred_roster',JSON.stringify(roster)); if(!skipAutoSync) scheduleAutoSync(); }
 
 function blankChar(){
   return { id:uid(), name:'', handle:'', role:'Solo',
@@ -5644,7 +5645,7 @@ function csExportChar(){
 /* ================ VEHICLE SYSTEM ================ */
 let vehicles=[];
 try{ vehicles=JSON.parse(store.get('cpred_vehicles')||'[]'); }catch(e){ vehicles=[]; }
-function saveVehicles(){ store.set('cpred_vehicles',JSON.stringify(vehicles)); }
+function saveVehicles(skipAutoSync){ store.set('cpred_vehicles',JSON.stringify(vehicles)); if(!skipAutoSync) scheduleAutoSync(); }
 function vehFind(id){ return vehicles.find(v=>v.id===id); }
 
 function blankVehicle(){
@@ -6091,22 +6092,22 @@ function applyBackupData(data){
   if(Array.isArray(data.roster)){
     roster=data.roster;
     roster.forEach(c=>{ if(!Array.isArray(c.weapons))c.weapons=[]; if(!c.stats||typeof c.stats!=='object')c.stats={}; });
-    saveRoster();
+    saveRoster(true);
   }
   if(Array.isArray(data.vehicles)){
     vehicles=data.vehicles;
     vehicles.forEach(v=>{ if(!Array.isArray(v.upgrades))v.upgrades=[]; if(!Array.isArray(v.mountedWeapons))v.mountedWeapons=[]; });
-    saveVehicles();
+    saveVehicles(true);
   }
   if(Array.isArray(data.architectures)){
     architectures=data.architectures;
     architectures.forEach(a=>{ if(!Array.isArray(a.floors))a.floors=[]; });
-    saveArchitectures();
+    saveArchitectures(true);
   }
   if(Array.isArray(data.gigs)){
     gigs=data.gigs;
     gigs.forEach(g=>{ if(!Array.isArray(g.participants))g.participants=[]; if(g.status!=='done')g.status='active'; });
-    saveGigs();
+    saveGigs(true);
   }
   if(data.tokenStyle&&typeof data.tokenStyle==='object') Object.assign(tokenStyle,data.tokenStyle);
   if(data.sortMode==='added'||data.sortMode==='init') sortMode=data.sortMode;
@@ -6115,10 +6116,47 @@ function applyBackupData(data){
      point is just refreshing what's on screen, so a render hiccup (an
      unexpected shape somewhere we didn't anticipate) must never make the
      caller think the restore itself failed and the data is gone */
-  save();
+  save(true); /* skip auto-sync — we just pulled this from the cloud, nothing new to push back */
   try{ renderCombat(); renderNotes(); renderLog(); renderRoster(); renderGigsList(); renderVehicleList(); renderArchitectureList();
     if(document.getElementById('mapCanvasPanel').style.display!=='none') gridDraw();
   }catch(renderErr){ console.error('applyBackupData: restore succeeded but a render step failed',renderErr); }
+}
+
+/* ================ CLOUD SYNC (GitHub Gist) ================
+   Auto-sync pushes changes in the background a few seconds after they happen,
+   once a token is configured — no more remembering to tap SYNC. Before ANY
+   upload (auto or manual) we compare the gist's current revision against the
+   last one we actually know about: if another device synced something newer
+   that this one hasn't pulled down yet, we refuse to upload over it rather
+   than silently clobbering it. That's the one failure mode worth being
+   paranoid about, so it's structural, not a setting. */
+let autoSyncEnabled=store.get('cpred_autosync')!=='0';
+let gistSyncState='idle'; /* idle | syncing | synced | conflict | error */
+let _gistConflictNotified=false;
+let _autoSyncTimer=null, _autoSyncFirstPending=0;
+
+function gistCreds(){ return {token:store.get('cpred_gist_token')||'', gistId:store.get('cpred_gist_id')||''}; }
+function cloudSyncModalOpen(){
+  const m=document.getElementById('tempModal'); const t=document.getElementById('tempModalTitle');
+  return !!(m&&m.classList.contains('open')&&t&&t.textContent.indexOf('CLOUD SYNC')!==-1);
+}
+function setGistSyncState(state){
+  gistSyncState=state;
+  const dot=document.getElementById('gistStatusDot');
+  if(dot){
+    const colors={syncing:'var(--amber)',synced:'var(--cyan)',conflict:'var(--red)',error:'var(--red)'};
+    dot.style.background=colors[state]||'transparent';
+    dot.style.display=(state==='idle')?'none':'block';
+  }
+  if(cloudSyncModalOpen()) openCloudSync(); /* refresh the open modal to reflect the new state */
+}
+function gistStateLabel(){
+  return {idle:'',syncing:'Syncing…',synced:'✓ Up to date',conflict:'⚠ Paused — cloud has newer changes',error:'⚠ Last attempt failed'}[gistSyncState]||'';
+}
+function toggleAutoSync(){
+  autoSyncEnabled=!autoSyncEnabled;
+  store.set('cpred_autosync',autoSyncEnabled?'1':'0');
+  openCloudSync();
 }
 
 function openCloudSync(){
@@ -6126,9 +6164,10 @@ function openCloudSync(){
   const gistId=store.get('cpred_gist_id')||'';
   const lastSync=store.get('cpred_gist_last_sync')||'';
   const tokenMask=token?'••••••••'+token.slice(-4):'';
+  const stateLabel=gistStateLabel();
 
   const html='<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.6;">'+
-    'Sync your roster, vehicles, architectures, and encounter to a private GitHub Gist. '+
+    'Sync your roster, vehicles, architectures, gigs, and encounter to a private GitHub Gist. '+
     'Paste your personal access token once per device — it stays in this browser only.</div>'+
 
     '<div class="field" style="margin-bottom:10px;"><label class="sl">GITHUB TOKEN (gist scope only)</label>'+
@@ -6141,12 +6180,31 @@ function openCloudSync(){
     '<div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px;">Paste this ID on another device to sync to the same gist.</div>'+
     '</div>'+
 
+    '<div class="seg" style="margin-bottom:10px;">'+
+      '<div class="sl" style="flex:0 0 auto;align-self:center;margin-right:8px;">AUTO-SYNC</div>'+
+      '<button class="'+(autoSyncEnabled?'sel-a':'')+'" style="flex:1;" onclick="toggleAutoSync()">'+(autoSyncEnabled?'ON':'OFF')+'</button>'+
+    '</div>'+
+    '<div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin:-4px 0 10px;">'+
+      (autoSyncEnabled?'Pushes changes in the background a few seconds after you make them.':'Off — use SYNC TO GIST below manually.')+
+    '</div>'+
+
+    (stateLabel?'<div style="font-family:var(--mono);font-size:11px;margin-bottom:8px;color:'+(gistSyncState==='conflict'||gistSyncState==='error'?'var(--amber)':'var(--cyan)')+';">'+stateLabel+'</div>':'')+
     (lastSync?'<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:10px;">Last sync: '+esc(lastSync)+'</div>':'')+
 
-    '<div style="display:flex;gap:8px;margin-bottom:10px;">'+
-      '<button class="btn cyan" style="flex:1;" onclick="cloudSyncSave()">☁ SYNC TO GIST</button>'+
-      '<button class="btn ghost" style="flex:1;" onclick="cloudSyncLoad()">⇩ LOAD FROM GIST</button>'+
-    '</div>'+
+    (gistSyncState==='conflict'?
+      '<div style="background:rgba(255,176,32,.1);border:1px solid var(--amber);border-radius:8px;padding:10px;margin-bottom:10px;">'+
+        '<div style="font-family:var(--mono);font-size:11px;color:var(--amber);margin-bottom:8px;">Another device synced newer changes that this one hasn\'t loaded yet. Auto-sync is paused so nothing gets overwritten.</div>'+
+        '<div style="display:flex;gap:8px;">'+
+          '<button class="btn cyan sm" style="flex:1;" onclick="cloudSyncLoad()">⇩ LOAD THEIRS FIRST</button>'+
+          '<button class="btn ghost sm" style="flex:1;color:var(--red);" onclick="cloudSyncSave(true)">OVERWRITE WITH MINE</button>'+
+        '</div>'+
+      '</div>'
+      :
+      '<div style="display:flex;gap:8px;margin-bottom:10px;">'+
+        '<button class="btn cyan" style="flex:1;" onclick="cloudSyncSave()">☁ SYNC TO GIST</button>'+
+        '<button class="btn ghost" style="flex:1;" onclick="cloudSyncLoad()">⇩ LOAD FROM GIST</button>'+
+      '</div>'
+    )+
 
     '<div id="cloudSyncMsg" style="font-family:var(--mono);font-size:11px;color:var(--muted);min-height:16px;"></div>'+
 
@@ -6161,7 +6219,8 @@ function openCloudSync(){
       '1. Paste the same token<br>'+
       '2. Paste the gist ID from your first device<br>'+
       '3. Hit LOAD FROM GIST<br><br>'+
-      '<b>After that:</b> tap SYNC when you make changes, LOAD when you switch devices.'+
+      '<b>After that:</b> with auto-sync on, changes push themselves — tap LOAD when you switch devices so this one picks up what the others saved. '+
+      'If two devices change things before either loads the other\'s update, auto-sync pauses and asks which copy to keep rather than guessing.'+
     '</div></details>';
 
   showModal('☁ CLOUD SYNC',html);
@@ -6175,18 +6234,42 @@ function cloudSyncSaveToken(){
   return {token:t,gistId:id};
 }
 
-async function cloudSyncSave(){
+/* shared upload path for both the manual SYNC button and background auto-sync.
+   opts.force skips the conflict check (used by "OVERWRITE WITH MINE").
+   opts.silent suppresses the modal's own status text (used by auto-sync, which
+   runs whether or not the modal happens to be open). */
+async function doGistUpload(opts){
+  opts=opts||{};
+  const {token,gistId}=gistCreds();
+  if(!token) return {ok:false,reason:'no-token'};
+  setGistSyncState('syncing');
   const msgEl=document.getElementById('cloudSyncMsg');
-  const {token,gistId}=cloudSyncSaveToken();
-  if(!token){ msgEl.textContent='⚠ Token required. Get one at github.com/settings/tokens (gist scope).'; return; }
-  msgEl.textContent='Uploading…';
-  const data=buildBackupData();
-  const body={
-    description:'Cyberpunk RED Companion — auto sync',
-    public:false,
-    files:{'cpred-backup.json':{content:JSON.stringify(data,null,1)}}
-  };
+  if(msgEl&&!opts.silent) msgEl.textContent='Uploading…';
   try{
+    if(gistId&&!opts.force){
+      const checkRes=await fetch('https://api.github.com/gists/'+gistId,{
+        headers:{'Authorization':'token '+token,'Accept':'application/vnd.github+json'}
+      });
+      if(checkRes.ok){
+        const remote=await checkRes.json();
+        const remoteVersion=(remote.history&&remote.history[0]&&remote.history[0].version)||remote.updated_at||'';
+        const known=store.get('cpred_gist_known_version')||'';
+        if(known&&remoteVersion&&remoteVersion!==known){
+          setGistSyncState('conflict');
+          if(!_gistConflictNotified){ _gistConflictNotified=true;
+            toast('⚠ Cloud has newer changes from another device'); }
+          return {ok:false,reason:'conflict'};
+        }
+      }
+      /* a failed pre-check isn't fatal on its own — fall through and let the
+         actual upload attempt below surface whatever the real problem is */
+    }
+    const data=buildBackupData();
+    const body={
+      description:'Cyberpunk RED Companion — auto sync',
+      public:false,
+      files:{'cpred-backup.json':{content:JSON.stringify(data,null,1)}}
+    };
     const url=gistId?'https://api.github.com/gists/'+gistId:'https://api.github.com/gists';
     const method=gistId?'PATCH':'POST';
     const res=await fetch(url,{
@@ -6196,19 +6279,47 @@ async function cloudSyncSave(){
     });
     if(!res.ok){
       const err=await res.text();
-      msgEl.textContent='⚠ Upload failed ('+res.status+'). '+err.slice(0,120);
-      return;
+      setGistSyncState('error');
+      if(msgEl&&!opts.silent) msgEl.textContent='⚠ Upload failed ('+res.status+'). '+err.slice(0,120);
+      return {ok:false,reason:'http',status:res.status};
     }
     const result=await res.json();
-    store.set('cpred_gist_id',result.id);
+    if(!gistId){ store.set('cpred_gist_id',result.id); const gi=document.getElementById('gistId'); if(gi) gi.value=result.id; }
+    const newVersion=(result.history&&result.history[0]&&result.history[0].version)||result.updated_at||'';
+    store.set('cpred_gist_known_version',newVersion);
     const stamp=new Date().toLocaleString();
-    store.set('cpred_gist_last_sync',stamp+' (uploaded)');
-    document.getElementById('gistId').value=result.id;
-    msgEl.textContent='✓ Synced. Gist ID: '+result.id;
-    toast('Synced to gist ✓');
-  } catch(e){
-    msgEl.textContent='⚠ Network error: '+e.message;
+    store.set('cpred_gist_last_sync',stamp+(opts.silent?' (auto)':' (uploaded)'));
+    _gistConflictNotified=false;
+    setGistSyncState('synced');
+    if(msgEl) msgEl.textContent='✓ Synced. Gist ID: '+result.id;
+    if(!opts.silent) toast('Synced to gist ✓');
+    return {ok:true};
+  }catch(e){
+    setGistSyncState('error');
+    if(msgEl&&!opts.silent) msgEl.textContent='⚠ Network error: '+e.message;
+    return {ok:false,reason:'exception',message:e.message};
   }
+}
+
+/* debounced trigger called from every save*() function — batches rapid-fire
+   changes into one upload instead of hammering the API, but never waits more
+   than ~20s total so a long burst of activity still syncs periodically */
+function scheduleAutoSync(){
+  if(!autoSyncEnabled) return;
+  if(!gistCreds().token) return; /* cloud not configured on this device — nothing to push to */
+  const now=Date.now();
+  if(!_autoSyncFirstPending) _autoSyncFirstPending=now;
+  clearTimeout(_autoSyncTimer);
+  const waited=now-_autoSyncFirstPending;
+  const delay=waited>20000?0:8000;
+  _autoSyncTimer=setTimeout(()=>{ _autoSyncFirstPending=0; doGistUpload({silent:true}); },delay);
+}
+
+async function cloudSyncSave(force){
+  const msgEl=document.getElementById('cloudSyncMsg');
+  const {token}=cloudSyncSaveToken();
+  if(!token){ if(msgEl) msgEl.textContent='⚠ Token required. Get one at github.com/settings/tokens (gist scope).'; return; }
+  await doGistUpload({force:!!force});
 }
 
 async function cloudSyncLoad(){
@@ -6218,6 +6329,7 @@ async function cloudSyncLoad(){
   if(!gistId){ msgEl.textContent='⚠ Gist ID required. Sync from another device first, or paste your gist ID.'; return; }
   if(!confirm('LOAD FROM GIST will overwrite everything on this device with the cloud version. Continue?')) return;
   msgEl.textContent='Downloading…';
+  setGistSyncState('syncing');
   try{
     const res=await fetch('https://api.github.com/gists/'+gistId,{
       headers:{'Authorization':'token '+token,'Accept':'application/vnd.github+json'}
@@ -6225,11 +6337,12 @@ async function cloudSyncLoad(){
     if(!res.ok){
       const err=await res.text();
       msgEl.textContent='⚠ Download failed ('+res.status+'). '+err.slice(0,120);
+      setGistSyncState('error');
       return;
     }
     const result=await res.json();
     const file=result.files&&result.files['cpred-backup.json'];
-    if(!file){ msgEl.textContent='⚠ No backup file in that gist.'; return; }
+    if(!file){ msgEl.textContent='⚠ No backup file in that gist.'; setGistSyncState('error'); return; }
     let raw=file.content;
     if(file.truncated){
       /* GitHub's gist API only inlines up to ~1MB of file content — a backup with
@@ -6237,18 +6350,23 @@ async function cloudSyncLoad(){
          off mid-object and "some things transfer, some don't". The full content
          is always available at raw_url regardless of size. */
       const rawRes=await fetch(file.raw_url);
-      if(!rawRes.ok){ msgEl.textContent='⚠ Backup is large — full download failed ('+rawRes.status+').'; return; }
+      if(!rawRes.ok){ msgEl.textContent='⚠ Backup is large — full download failed ('+rawRes.status+').'; setGistSyncState('error'); return; }
       raw=await rawRes.text();
     }
-    if(!raw){ msgEl.textContent='⚠ No backup file in that gist.'; return; }
-    let data; try{ data=JSON.parse(raw); }catch(e){ msgEl.textContent='⚠ Backup file is corrupt.'; return; }
+    if(!raw){ msgEl.textContent='⚠ No backup file in that gist.'; setGistSyncState('error'); return; }
+    let data; try{ data=JSON.parse(raw); }catch(e){ msgEl.textContent='⚠ Backup file is corrupt.'; setGistSyncState('error'); return; }
     applyBackupData(data);
+    const newVersion=(result.history&&result.history[0]&&result.history[0].version)||result.updated_at||'';
+    store.set('cpred_gist_known_version',newVersion);
+    _gistConflictNotified=false;
     const stamp=new Date().toLocaleString();
     store.set('cpred_gist_last_sync',stamp+' (loaded from '+(data.timestamp||'?')+')');
     msgEl.textContent='✓ Loaded backup from '+(data.timestamp||'gist');
+    setGistSyncState('synced');
     toast('Loaded from gist ✓');
   } catch(e){
     msgEl.textContent='⚠ Load failed: '+e.message;
+    setGistSyncState('error');
   }
 }
 
@@ -6273,7 +6391,7 @@ function vsExportVehicle(){
    status so finished jobs stay in a collapsed history instead of vanishing. */
 let gigs=[];
 try{ gigs=JSON.parse(store.get('cpred_gigs')||'[]'); }catch(e){ gigs=[]; }
-function saveGigs(){ store.set('cpred_gigs',JSON.stringify(gigs)); }
+function saveGigs(skipAutoSync){ store.set('cpred_gigs',JSON.stringify(gigs)); if(!skipAutoSync) scheduleAutoSync(); }
 function gigFind(id){ return gigs.find(g=>g.id===id); }
 let gigEditId=null;
 function openGigForm(id){
@@ -6351,7 +6469,7 @@ function renderGigsList(){
 /* ================ NET ARCHITECTURE SYSTEM ================ */
 let architectures=[];
 try{ architectures=JSON.parse(store.get('cpred_architectures')||'[]'); }catch(e){ architectures=[]; }
-function saveArchitectures(){ store.set('cpred_architectures',JSON.stringify(architectures)); }
+function saveArchitectures(skipAutoSync){ store.set('cpred_architectures',JSON.stringify(architectures)); if(!skipAutoSync) scheduleAutoSync(); }
 function archFind(id){ return architectures.find(a=>a.id===id); }
 
 function blankArchitecture(){
