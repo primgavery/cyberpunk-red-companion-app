@@ -17,6 +17,7 @@ All access goes through `store.get/set` (which survives blocked/full storage —
 | `cpred_tokenstyle` | `save()` | token display options (shape, portrait, name, hp display, scale) |
 | `cpred_theater` | `save()` | `'1'`/`'0'` — Theater of the Mind |
 | `cpred_map` | `save()` | `{cols, rows, floorDeco[]}` — grid size and painted floor (**not** cover/tokens; those are combatants) |
+| `cpred_theme` | `setTheme()` | `slate` \| `paper` \| `ember` \| `neon`. A per-device preference: **not** included in backups, Save/Load or cloud sync. Read by a script in `<head>` before first paint — see [THEMING.md](THEMING.md) |
 | `cpred_encounter` | `saveEncounterState()` | the active encounter record: `{name, summary, scene, rewards:{eb,ip,notes,bonuses[],claimed}, kills:{combatantId→tier}, paid:{combatantId→1}, claims[]}` — see [ENCOUNTER-FORMAT.md](ENCOUNTER-FORMAT.md) |
 | `cpred_roster` | `saveRoster()` | character sheets |
 | `cpred_vehicles` | `saveVehicles()` | vehicle sheets |
@@ -116,7 +117,7 @@ If that character's sheet is open, `awardToRoster` also pushes to the sheet's in
 | **Roster export** `{app:"cpred_roster", roster:[…]}` | CHARS → export | `applyRosterImport` — merge by name, skips duplicates | characters only (see `test-character.json`) |
 | **Vehicle export** `{app:"cpred_vehicles", …}` | vehicle sheet | `applyVehicleImport` | vehicles only |
 
-Not in any backup: the Gist token, Gist bookkeeping keys, undo history.
+Not in any backup: the Gist token, Gist bookkeeping keys, the theme, undo history.
 
 ## Cloud sync (GitHub Gist)
 

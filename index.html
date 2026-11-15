@@ -6,11 +6,16 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0a0a0c">
+<script>try{var __t=localStorage.getItem("cpred_theme")||"slate";if(["slate","paper","ember","neon"].indexOf(__t)<0)__t="slate";document.documentElement.setAttribute("data-theme",__t);document.documentElement.setAttribute("data-ui",__t==="neon"?"classic":"modern");}catch(e){document.documentElement.setAttribute("data-theme","slate");document.documentElement.setAttribute("data-ui","modern");}</script>
 <title>RED // Companion</title>
 <style>
   :root{
     --bg:#0a0a0c; --panel:#141419; --panel-2:#1c1c23; --line:#2a2a33;
+    --bg-rgb:10,10,12; --nav-bg:#0d0d11;
     --red:#ff2b3d; --red-dim:#7a1620; --cyan:#2de2e6; --cyan-dim:#155e60;
+    --red-rgb:255,43,61; --cyan-rgb:45,226,230; --amber-rgb:255,176,32; --good-rgb:61,220,132;
+    --red-text:#ff8a92; --accent:var(--red); --accent-rgb:255,43,61; --on-accent:#fff; --focus:var(--cyan);
+    --ally-ring:#00e5ff; --enemy-ring:#ff4444; --ally-token:#0099cc; --enemy-token:#cc2222;
     --amber:#ffb020; --text:#f0f0f2; --muted:#9b9ba9; --dim:#c2c2cc; --good:#3ddc84;
     --hdr:52px; --tbar:0px; --nav:58px;   /* sticky offsets, kept in sync by syncStickyOffsets() */
     --mono:'SF Mono',ui-monospace,'Cascadia Mono','Roboto Mono',Menlo,Consolas,monospace;
@@ -21,7 +26,7 @@
   body{background:var(--bg);color:var(--text);font-family:var(--sans);padding-bottom:76px;
     min-height:100vh;overscroll-behavior:none;}
   header{display:flex;align-items:center;gap:10px;padding:14px 16px 12px;border-bottom:1px solid var(--line);
-    position:sticky;top:0;background:linear-gradient(180deg,#0a0a0c,#0a0a0cee);backdrop-filter:blur(6px);z-index:20;}
+    position:sticky;top:0;background:linear-gradient(180deg,rgba(var(--bg-rgb),1),rgba(var(--bg-rgb),.933));backdrop-filter:blur(6px);z-index:20;}
   .logo{font-family:var(--mono);font-weight:800;letter-spacing:1px;font-size:18px;}
   .logo .r{color:var(--red);} .logo .slash{color:var(--muted);}
   .rng-tag{font-family:var(--mono);font-size:10px;color:var(--muted);border:1px solid var(--line);
@@ -35,11 +40,11 @@
     margin:2px 0 10px;font-weight:700;}
   input,select,textarea{background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--text);
     font-family:var(--mono);font-size:15px;padding:11px 10px;width:100%;}
-  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--cyan);}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--focus);}
   textarea{font-family:var(--sans);resize:vertical;min-height:60px;line-height:1.5;}
   .field{display:flex;flex-direction:column;gap:4px;}
   .sl{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:1px;}
-  .btn{background:var(--red);color:#fff;border:none;border-radius:8px;font-weight:700;font-family:var(--sans);
+  .btn{background:var(--accent);color:var(--on-accent);border:none;border-radius:8px;font-weight:700;font-family:var(--sans);
     font-size:15px;padding:12px 16px;cursor:pointer;letter-spacing:.3px;transition:transform .05s,filter .15s;}
   .btn:active{transform:scale(.97);filter:brightness(1.1);}
   .btn.ghost{background:var(--panel-2);border:1px solid var(--line);color:var(--text);}
@@ -48,8 +53,8 @@
   .btn.sm{padding:9px 12px;font-size:13px;}
   .crit{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:1px;padding:2px 7px;
     border-radius:4px;font-weight:700;}
-  .crit.up{background:rgba(61,220,132,.12);color:var(--good);border:1px solid var(--good);}
-  .crit.down{background:rgba(255,43,61,.12);color:var(--red);border:1px solid var(--red);}
+  .crit.up{background:rgba(var(--good-rgb),.12);color:var(--good);border:1px solid var(--good);}
+  .crit.down{background:rgba(var(--red-rgb),.12);color:var(--red);border:1px solid var(--red);}
   .crit.mini{padding:0 4px;border:none;font-size:12px;}
   .divider{height:1px;background:var(--line);margin:16px 0;}
 
@@ -87,8 +92,8 @@
   .seg{display:flex;gap:6px;}
   .seg button{flex:1;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);
     font-family:var(--mono);font-size:13px;padding:10px;border-radius:8px;cursor:pointer;font-weight:700;}
-  .seg button.sel-e{border-color:var(--red);color:var(--red);background:rgba(255,43,61,.08);}
-  .seg button.sel-a{border-color:var(--cyan);color:var(--cyan);background:rgba(45,226,230,.08);}
+  .seg button.sel-e{border-color:var(--red);color:var(--red);background:rgba(var(--red-rgb),.08);}
+  .seg button.sel-a{border-color:var(--cyan);color:var(--cyan);background:rgba(var(--cyan-rgb),.08);}
   .seg button.fsel{border-color:var(--muted);color:var(--text);background:var(--panel-2);}
   /* ---------- BATCH 5: TOOLBAR ---------- */
   .toolbar{display:flex;gap:8px;margin:10px 0 12px;position:relative;}
@@ -118,8 +123,8 @@
   .col-head{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;letter-spacing:1px;
     font-weight:700;padding:9px 10px;border-radius:8px;margin-bottom:10px;text-transform:uppercase;
     position:sticky;top:calc(var(--hdr) + var(--tbar));z-index:5;backdrop-filter:blur(6px);}
-  .col-head.allies{color:var(--cyan);border:1px solid var(--cyan-dim);background:rgba(45,226,230,.08);}
-  .col-head.enemies{color:var(--red);border:1px solid var(--red-dim);background:rgba(255,43,61,.08);}
+  .col-head.allies{color:var(--cyan);border:1px solid var(--cyan-dim);background:rgba(var(--cyan-rgb),.08);}
+  .col-head.enemies{color:var(--red);border:1px solid var(--red-dim);background:rgba(var(--red-rgb),.08);}
   .col-head .cnt{margin-left:auto;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
     padding:1px 9px;color:var(--text);font-size:11px;}
   .col-empty{color:var(--muted);font-family:var(--mono);font-size:12px;text-align:center;
@@ -139,10 +144,10 @@
   .icon-btn{background:none;border:none;color:var(--muted);font-size:17px;cursor:pointer;padding:0;line-height:1;
     border-radius:8px;min-width:40px;min-height:40px;display:inline-flex;align-items:center;justify-content:center;
     flex:0 0 auto;}
-  .icon-btn.dup:active{color:var(--cyan);background:rgba(45,226,230,.10);}
+  .icon-btn.dup:active{color:var(--cyan);background:rgba(var(--cyan-rgb),.10);}
   /* remove is set apart from duplicate so a slipped thumb does not delete the combatant */
   .icon-btn.kill{margin-left:8px;}
-  .icon-btn.kill:active{color:var(--red);background:rgba(255,43,61,.12);}
+  .icon-btn.kill:active{color:var(--red);background:rgba(var(--red-rgb),.12);}
   .badge-row{margin:-2px 0 8px;}
   .badge{font-family:var(--mono);font-size:9px;letter-spacing:.5px;padding:3px 6px;border-radius:4px;font-weight:700;text-transform:uppercase;}
   /* badges that clear on tap are real buttons — a title tooltip never appears on touch,
@@ -151,14 +156,14 @@
     display:inline-flex;align-items:center;font-family:var(--mono);}
   button.badge .xi{margin-left:5px;font-size:11px;}
   button.badge:active{filter:brightness(1.35);}
-  .badge.wounded{background:rgba(255,176,32,.14);color:var(--amber);border:1px solid var(--amber);}
-  .badge.down{background:rgba(255,43,61,.16);color:var(--red);border:1px solid var(--red);}
+  .badge.wounded{background:rgba(var(--amber-rgb),.14);color:var(--amber);border:1px solid var(--amber);}
+  .badge.down{background:rgba(var(--red-rgb),.16);color:var(--red);border:1px solid var(--red);}
   /* align-items:flex-start — the default (stretch) made every chip grow to match the tallest
      when one long injury name wrapped to two lines */
   .badge-row{display:flex;flex-wrap:wrap;gap:5px;align-items:flex-start;}
   .badge{line-height:1.35;}
   button.badge{text-align:left;}
-  .badge.injury{background:rgba(255,43,61,.12);color:#ff8a92;border:1px solid var(--red-dim);cursor:pointer;}
+  .badge.injury{background:rgba(var(--red-rgb),.12);color:var(--red-text);border:1px solid var(--red-dim);cursor:pointer;}
   .badge.injury .xi{opacity:.6;margin-left:3px;}
   .combatant.cover{border-left-color:#7a7a86;background:#16161a;}
   .badge.cover{background:rgba(140,140,160,.14);color:#b9b9c6;border:1px solid #55555f;}
@@ -177,12 +182,12 @@
   .turnbar button{background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:7px;
     font-family:var(--mono);font-size:11px;padding:7px 10px;cursor:pointer;}
   .turnbar button:active{transform:scale(.94);border-color:var(--cyan);}
-  .turnbar button.go{border-color:var(--cyan);color:var(--cyan);background:rgba(45,226,230,.10);}
-  .combatant.active{box-shadow:0 0 0 2px var(--amber),0 0 14px rgba(255,176,32,.22);}
-  .badge.turn{background:rgba(255,176,32,.16);color:var(--amber);border:1px solid var(--amber);}
-  .badge.mortal{background:rgba(255,43,61,.20);color:#ff8a92;border:1px solid var(--red);}
-  .death-box{border:1px solid var(--red-dim);background:rgba(255,43,61,.06);border-radius:8px;padding:8px;margin:8px 0;}
-  .death-box .dl{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:#ff8a92;margin-bottom:6px;}
+  .turnbar button.go{border-color:var(--cyan);color:var(--cyan);background:rgba(var(--cyan-rgb),.10);}
+  .combatant.active{box-shadow:0 0 0 2px var(--amber),0 0 14px rgba(var(--amber-rgb),.22);}
+  .badge.turn{background:rgba(var(--amber-rgb),.16);color:var(--amber);border:1px solid var(--amber);}
+  .badge.mortal{background:rgba(var(--red-rgb),.20);color:var(--red-text);border:1px solid var(--red);}
+  .death-box{border:1px solid var(--red-dim);background:rgba(var(--red-rgb),.06);border-radius:8px;padding:8px;margin:8px 0;}
+  .death-box .dl{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--red-text);margin-bottom:6px;}
   .death-row{display:flex;gap:6px;align-items:center;}
   .death-row input{width:56px;text-align:center;}
   .death-row button{flex:1;background:var(--red-dim);color:#ffdfe2;border:1px solid var(--red);border-radius:7px;
@@ -192,7 +197,7 @@
   .ap-toggle{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--muted);cursor:pointer;}
   .ap-toggle input{width:14px;height:14px;accent-color:var(--amber);}
   .shot-count{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--amber);margin-bottom:6px;}
-  .fe-btn{flex:1;background:rgba(45,226,230,.08);color:var(--cyan);border:1px solid var(--cyan-dim);border-radius:8px;
+  .fe-btn{flex:1;background:rgba(var(--cyan-rgb),.08);color:var(--cyan);border:1px solid var(--cyan-dim);border-radius:8px;
     font-family:var(--mono);font-size:11px;letter-spacing:.5px;padding:9px 0;cursor:pointer;}
   .fe-btn:active{transform:scale(.98);}
   .wcat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
@@ -209,10 +214,10 @@
   .wcat.custom{background:#f4f4f6;border-color:#f4f4f6;color:#0b0b0d;font-weight:700;}
   .wcat.custom .wc-n{color:#0b0b0d;}
   .wcat.custom:active{border-color:var(--cyan);}
-  .add-wpn{margin-top:6px;background:rgba(45,226,230,.10);border:1px solid var(--cyan);color:var(--cyan);
+  .add-wpn{margin-top:6px;background:rgba(var(--cyan-rgb),.10);border:1px solid var(--cyan);color:var(--cyan);
     border-radius:8px;font-family:var(--mono);font-size:11px;letter-spacing:1px;padding:10px 0;width:100%;
     font-weight:700;cursor:pointer;}
-  .add-wpn:active{transform:scale(.98);background:rgba(45,226,230,.18);}
+  .add-wpn:active{transform:scale(.98);background:rgba(var(--cyan-rgb),.18);}
   .init-edit{display:flex;align-items:center;gap:6px;margin-bottom:12px;}
   .init-edit .sl2{margin:0;flex:1;}
   .init-edit input{width:56px;text-align:center;padding:8px 4px;font-weight:700;}
@@ -231,7 +236,7 @@
   /* one-shot damage flash — class is baked in only on the render where HP dropped */
   .hpbar.hpflash{animation:barflash .55s ease-out;}
   @keyframes barflash{
-    0%{box-shadow:0 0 0 2px var(--red),0 0 18px 2px rgba(255,43,61,.8);background:#3a1216;}
+    0%{box-shadow:0 0 0 2px var(--red),0 0 18px 2px rgba(var(--red-rgb),.8);background:#3a1216;}
     100%{box-shadow:0 0 0 0 transparent;background:#26262f;} }
   .combatant.hit-flash{animation:cardflash .55s ease-out;}
   @keyframes cardflash{
@@ -258,7 +263,7 @@
   .inv-row .iw-ammo{font-family:var(--mono);font-size:13px;font-weight:800;flex:0 0 auto;}
   .mini-btn{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:6px;
     font-family:var(--mono);font-size:11px;font-weight:700;padding:6px 8px;cursor:pointer;flex:0 0 auto;}
-  .mini-btn.x{color:#ff8a92;}
+  .mini-btn.x{color:var(--red-text);}
   .mini-btn:disabled{opacity:.35;}
 
   .track-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;}
@@ -283,17 +288,17 @@
     border-radius:7px;font-family:var(--mono);font-size:12px;font-weight:700;padding:0 13px;cursor:pointer;}
   .cond-add button:active{transform:scale(.95);border-color:var(--cyan);}
   .cond-hint{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:6px;line-height:1.4;}
-  .badge.cond{background:rgba(255,176,32,.13);color:var(--amber);border:1px solid rgba(255,176,32,.4);cursor:pointer;}
+  .badge.cond{background:rgba(var(--amber-rgb),.13);color:var(--amber);border:1px solid rgba(var(--amber-rgb),.4);cursor:pointer;}
 
   .dmg-tool{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;}
   .dmg-tool input.amt{width:64px;flex:0 0 auto;padding:9px 6px;font-size:14px;text-align:center;}
   .mini-seg{display:inline-flex;gap:4px;}
   .mini-seg button{background:var(--panel-2);border:1px solid var(--line);color:var(--muted);font-family:var(--mono);
     font-size:12px;font-weight:700;padding:9px 9px;border-radius:6px;cursor:pointer;}
-  .mini-seg button.on{border-color:var(--cyan);color:var(--cyan);background:rgba(45,226,230,.10);}
+  .mini-seg button.on{border-color:var(--cyan);color:var(--cyan);background:rgba(var(--cyan-rgb),.10);}
   .dmg-btn{background:var(--red-dim);color:#ffd0d4;border:1px solid var(--red);border-radius:7px;font-family:var(--sans);
     font-weight:700;font-size:13px;padding:9px 12px;cursor:pointer;}
-  .heal-btn{background:rgba(61,220,132,.12);color:var(--good);border:1px solid var(--good);border-radius:7px;font-family:var(--sans);
+  .heal-btn{background:rgba(var(--good-rgb),.12);color:var(--good);border:1px solid var(--good);border-radius:7px;font-family:var(--sans);
     font-weight:700;font-size:13px;padding:9px 12px;cursor:pointer;}
   .cnote textarea{min-height:44px;font-size:13px;}
   .empty-state{text-align:center;color:var(--muted);font-family:var(--mono);font-size:13px;border:1px dashed var(--line);
@@ -324,7 +329,7 @@
   .sp-chip{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.4px;
     border:1px solid var(--line);border-radius:4px;padding:2px 6px;background:var(--panel-2);}
   .sp-chip.full{color:var(--cyan);border-color:var(--cyan-dim);}
-  .sp-chip.ablated{color:var(--amber);border-color:rgba(255,176,32,.45);}
+  .sp-chip.ablated{color:var(--amber);border-color:rgba(var(--amber-rgb),.45);}
   .sp-chip.stripped{color:var(--red);border-color:var(--red-dim);}
   .status-line{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin:1px 0 4px;}
   .ammo-chips{display:inline-flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;}
@@ -332,22 +337,22 @@
     border:1px solid var(--line);border-radius:4px;padding:2px 6px;background:var(--panel-2);
     max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .ammo-chip.dry{color:var(--red);border-color:var(--red-dim);}
-  .ammo-chip.low{color:var(--amber);border-color:rgba(255,176,32,.45);}
+  .ammo-chip.low{color:var(--amber);border-color:rgba(var(--amber-rgb),.45);}
   .tr-sp{display:inline-flex;gap:4px;margin-left:7px;}
   .tr-sp .sp-chip{font-size:9px;padding:1px 5px;}
-  .target-row.sel{border-color:var(--red);background:rgba(255,43,61,.10);}
+  .target-row.sel{border-color:var(--red);background:rgba(var(--red-rgb),.10);}
   .target-row .tr-tick{font-family:var(--mono);font-size:12px;color:var(--muted);margin-right:6px;}
   .target-row.sel .tr-tick{color:var(--red);}
   .target-row .tr-shield{font-size:10px;color:#b9b9c6;}
   .cover-link{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);margin:8px 0 2px;}
   .cover-link select{flex:1;padding:5px 6px;font-size:12px;}
   .badge.behind{background:rgba(140,140,160,.12);color:#b9b9c6;border:1px solid #4a4a55;}
-  .badge.dodge{background:rgba(45,226,230,.10);color:var(--cyan);border:1px solid var(--cyan-dim);}
+  .badge.dodge{background:rgba(var(--cyan-rgb),.10);color:var(--cyan);border:1px solid var(--cyan-dim);}
   .def-warn{font-family:var(--mono);font-size:10px;letter-spacing:.5px;color:var(--amber);margin:6px 0 0;}
   .dodge-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);}
   .dodge-row:last-child{border-bottom:none;}
   .dodge-row .dn{flex:1;font-size:12px;}
-  .dodge-row button{background:rgba(45,226,230,.10);border:1px solid var(--cyan-dim);color:var(--cyan);
+  .dodge-row button{background:rgba(var(--cyan-rgb),.10);border:1px solid var(--cyan-dim);color:var(--cyan);
     border-radius:6px;font-family:var(--mono);font-size:10px;padding:5px 9px;cursor:pointer;}
   .dodge-row .out{color:var(--good);font-family:var(--mono);font-size:10px;}
   .dodge-row .in{color:var(--red);font-family:var(--mono);font-size:10px;}
@@ -365,8 +370,8 @@
     align-items:center;gap:2px;min-height:44px;justify-content:center;}
   .band-chip .bc-m{font-size:12px;font-weight:700;letter-spacing:.3px;}
   .band-chip .bc-dv{font-size:11px;color:var(--muted);font-weight:700;}
-  .band-chip.sel{border-color:var(--red);background:rgba(255,43,61,.10);}
-  .band-chip.sel .bc-dv{color:#ff8a92;}
+  .band-chip.sel{border-color:var(--red);background:rgba(var(--red-rgb),.10);}
+  .band-chip.sel .bc-dv{color:var(--red-text);}
   .band-chip:active{transform:scale(.96);}
   .dmg-context{font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.5;
     background:var(--panel-2);border:1px solid var(--line);border-radius:7px;
@@ -381,13 +386,13 @@
   .atk-line b{color:var(--text);font-size:16px;}
   .verdict{font-family:var(--mono);font-weight:800;font-size:18px;letter-spacing:1px;padding:10px;border-radius:8px;
     text-align:center;margin-bottom:12px;}
-  .verdict.hit{color:var(--good);border:1px solid var(--good);background:rgba(61,220,132,.08);}
+  .verdict.hit{color:var(--good);border:1px solid var(--good);background:rgba(var(--good-rgb),.08);}
   .verdict.miss{color:var(--muted);border:1px solid var(--line);}
   .dmg-result{font-family:var(--mono);font-size:14px;line-height:1.6;background:var(--panel-2);border:1px solid var(--line);
     border-radius:8px;padding:12px;margin-bottom:12px;}
   .dmg-result b{font-size:17px;}
-  .crit-hit{font-family:var(--mono);font-size:13px;font-weight:700;color:#ff8a92;line-height:1.5;
-    background:rgba(255,43,61,.10);border:1px solid var(--red);border-radius:8px;padding:11px;margin-bottom:12px;}
+  .crit-hit{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--red-text);line-height:1.5;
+    background:rgba(var(--red-rgb),.10);border:1px solid var(--red);border-radius:8px;padding:11px;margin-bottom:12px;}
   .wpick-row{display:flex;flex-direction:column;gap:2px;background:var(--panel-2);border:1px solid var(--line);
     border-radius:8px;padding:11px 12px;cursor:pointer;color:var(--text);text-align:left;margin-bottom:6px;width:100%;}
   .wpick-row .wp-name{font-weight:700;font-size:14px;}
@@ -422,7 +427,7 @@
   /* ---------- CN CHIP ---------- */
   .cn-chip{font-family:var(--mono);font-size:10px;font-weight:800;letter-spacing:.5px;flex:0 0 auto;
     border:1px solid var(--line);border-radius:5px;padding:3px 6px;color:var(--muted);background:var(--panel-2);}
-  .combatant.enemy .cn-chip{color:#ff8a92;border-color:var(--red-dim);}
+  .combatant.enemy .cn-chip{color:var(--red-text);border-color:var(--red-dim);}
   .combatant.ally .cn-chip{color:#8ff0f2;border-color:var(--cyan-dim);}
 
   /* ---------- COMBAT LOG ---------- */
@@ -430,7 +435,7 @@
     border-bottom:1px solid var(--line);padding:10px 2px 6px;margin-top:6px;}
   .log-line{font-family:var(--mono);font-size:12px;line-height:1.55;color:var(--text);
     border-bottom:1px dashed var(--line);padding:8px 2px;word-break:break-word;}
-  .log-line.crit{color:#ff8a92;} .log-line.heal{color:#8ff0f2;} .log-line.death{color:var(--amber);}
+  .log-line.crit{color:var(--red-text);} .log-line.heal{color:#8ff0f2;} .log-line.death{color:var(--amber);}
 
   /* ---------- NPC LIBRARY ---------- */
   .lib-tier{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--muted);font-weight:700;margin:14px 0 7px;}
@@ -458,12 +463,12 @@
   .lib-added{font-family:var(--mono);font-size:11px;color:var(--good);min-height:15px;margin-top:10px;}
 
   /* ---------- NAV ---------- */
-  nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#0d0d11;border-top:1px solid var(--line);
+  nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--nav-bg);border-top:1px solid var(--line);
     z-index:30;padding-bottom:env(safe-area-inset-bottom);}
   nav button{flex:1;background:none;border:none;color:var(--muted);padding:11px 0 12px;cursor:pointer;display:flex;
     flex-direction:column;align-items:center;gap:3px;font-family:var(--mono);font-size:10px;letter-spacing:1px;font-weight:700;}
   nav button .ic{font-size:19px;line-height:1;}
-  nav button.active{color:var(--red);}
+  nav button.active{color:var(--accent);}
 
   /* ---------- CALC ---------- */
   .calc-display{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 16px;text-align:right;margin-bottom:12px;}
@@ -497,7 +502,7 @@
   .toast button:active{transform:scale(.95);}
   body.sim .toast{position:absolute;}
   /* ---------- BATCH 2: COMBAT NUMBER ---------- */
-  .cn-box{border:1px solid var(--cyan-dim);background:rgba(45,226,230,.05);border-radius:10px;padding:10px;margin-bottom:12px;}
+  .cn-box{border:1px solid var(--cyan-dim);background:rgba(var(--cyan-rgb),.05);border-radius:10px;padding:10px;margin-bottom:12px;}
   .cn-toggle{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);cursor:pointer;font-weight:600;line-height:1.3;}
   .cn-toggle input{width:15px;height:15px;accent-color:var(--cyan);flex:0 0 auto;}
   .cn-grid{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;}
@@ -506,7 +511,7 @@
   .cn-cell input{border:none;background:none;text-align:center;font-weight:800;font-size:16px;padding:4px 2px;width:100%;min-width:0;color:var(--text);}
   .cn-cell button{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:6px;font-family:var(--mono);font-size:16px;font-weight:700;width:30px;padding:5px 0;cursor:pointer;flex:0 0 auto;}
   .cn-cell button:active{transform:scale(.92);border-color:var(--cyan);}
-  .cn-cell .cn-check{width:auto;padding:6px 9px;font-size:11px;letter-spacing:.5px;color:var(--cyan);border-color:var(--cyan-dim);background:rgba(45,226,230,.08);}
+  .cn-cell .cn-check{width:auto;padding:6px 9px;font-size:11px;letter-spacing:.5px;color:var(--cyan);border-color:var(--cyan-dim);background:rgba(var(--cyan-rgb),.08);}
   .cn-result{font-family:var(--mono);font-size:12px;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:8px 10px;margin-top:8px;line-height:1.5;background:var(--panel-2);}
   .cn-hint{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:7px;line-height:1.4;}
   /* ---------- BATCH 7: SETUP / IN-PLAY SPLIT ---------- */
@@ -539,13 +544,13 @@
     font-family:var(--mono);font-size:11px;font-weight:700;padding:8px 10px;cursor:pointer;letter-spacing:.3px;}
   .r-actions button:active{transform:scale(.96);}
   .r-actions .r-edit{border-color:var(--cyan-dim);color:var(--cyan);}
-  .r-actions .r-add{border-color:var(--cyan-dim);color:var(--cyan);background:rgba(45,226,230,.08);}
-  .r-actions .r-del{border-color:var(--red-dim);color:#ff8a92;}
+  .r-actions .r-add{border-color:var(--cyan-dim);color:var(--cyan);background:rgba(var(--cyan-rgb),.08);}
+  .r-actions .r-del{border-color:var(--red-dim);color:var(--red-text);}
   /* vehicle cards */
   .v-card{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--amber);border-radius:10px;padding:14px 14px 12px;margin-bottom:10px;}
   .v-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
   .v-name{font-weight:700;font-size:16px;flex:1;min-width:0;}
-  .v-type{font-family:var(--mono);font-size:10px;color:var(--amber);background:rgba(255,176,32,.12);border:1px solid rgba(255,176,32,.3);border-radius:4px;padding:2px 7px;letter-spacing:.5px;white-space:nowrap;}
+  .v-type{font-family:var(--mono);font-size:10px;color:var(--amber);background:rgba(var(--amber-rgb),.12);border:1px solid rgba(var(--amber-rgb),.3);border-radius:4px;padding:2px 7px;letter-spacing:.5px;white-space:nowrap;}
   .v-stats{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;}
   .v-stat{font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--panel-2);border-radius:4px;padding:2px 6px;}
   .v-stat b{color:var(--text);font-size:11px;}
@@ -582,7 +587,7 @@
     width:100%;min-width:0;color:var(--text);font-family:var(--mono);}
   .cs-derived{font-family:var(--mono);font-size:14px;font-weight:700;padding:6px 8px;background:var(--panel);
     border:1px solid var(--line);border-radius:5px;text-align:center;color:var(--text);}
-  .cp-tracker.cp-warn{background:rgba(255,176,32,.1);border:1px solid rgba(255,176,32,.4);color:var(--amber);}
+  .cp-tracker.cp-warn{background:rgba(var(--amber-rgb),.1);border:1px solid rgba(var(--amber-rgb),.4);color:var(--amber);}
   .cp-tracker.cp-border{background:rgba(255,80,40,.12);border:1px solid rgba(255,80,40,.4);color:var(--red);}
   .cp-tracker.cp-psycho{background:rgba(255,30,30,.15);border:1px solid rgba(255,30,30,.5);color:#ff4444;}
   .cp-tracker.cp-extreme{background:rgba(255,0,0,.2);border:2px solid #ff2222;color:#ff2222;}
@@ -652,13 +657,13 @@
   .rp-row .rp-info{flex:1;min-width:0;}
   .rp-row .rp-info b{font-size:14px;}
   .rp-row .rp-info span{font-family:var(--mono);font-size:10px;color:var(--muted);display:block;}
-  .rp-row .rp-add{background:rgba(45,226,230,.08);border:1px solid var(--cyan-dim);color:var(--cyan);border-radius:6px;
+  .rp-row .rp-add{background:rgba(var(--cyan-rgb),.08);border:1px solid var(--cyan-dim);color:var(--cyan);border-radius:6px;
     font-family:var(--mono);font-size:11px;font-weight:700;padding:8px 10px;cursor:pointer;flex:0 0 auto;}
   .rp-side{display:flex;gap:6px;margin-bottom:10px;}
   .rp-side button{flex:1;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);
     font-family:var(--mono);font-size:12px;padding:9px;border-radius:7px;cursor:pointer;font-weight:700;}
-  .rp-side button.sel-a{border-color:var(--cyan);color:var(--cyan);background:rgba(45,226,230,.08);}
-  .rp-side button.sel-e{border-color:var(--red);color:var(--red);background:rgba(255,43,61,.08);}
+  .rp-side button.sel-a{border-color:var(--cyan);color:var(--cyan);background:rgba(var(--cyan-rgb),.08);}
+  .rp-side button.sel-e{border-color:var(--red);color:var(--red);background:rgba(var(--red-rgb),.08);}
 
   /* ---------- SKILLS ---------- */
   .sk-cat{border:1px solid var(--line);border-radius:9px;margin-bottom:8px;overflow:hidden;}
@@ -726,7 +731,7 @@
   /* edit toggle button in modal header */
   .cs-edit-toggle{background:var(--panel-2);border:1px solid var(--line);color:var(--muted);border-radius:7px;
     font-family:var(--mono);font-size:11px;font-weight:700;padding:6px 12px;cursor:pointer;letter-spacing:.5px;margin-right:8px;}
-  .cs-edit-toggle.on{border-color:var(--amber);color:var(--amber);background:rgba(255,176,32,.1);}
+  .cs-edit-toggle.on{border-color:var(--amber);color:var(--amber);background:rgba(var(--amber-rgb),.1);}
 
   /* ---------- SHEET PAGE TABS ---------- */
   .cs-tabs{display:flex;gap:4px;margin:8px 0 12px;position:sticky;top:0;background:var(--panel);z-index:5;
@@ -734,7 +739,7 @@
   .cs-tab{flex:1;min-width:60px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);
     font-family:var(--mono);font-size:10px;font-weight:700;padding:8px 4px;border-radius:7px;cursor:pointer;
     letter-spacing:.3px;text-align:center;transition:all .12s;}
-  .cs-tab.active{border-color:var(--cyan);color:var(--cyan);background:rgba(45,226,230,.08);}
+  .cs-tab.active{border-color:var(--cyan);color:var(--cyan);background:rgba(var(--cyan-rgb),.08);}
   .cs-tab:active{transform:scale(.96);}
   .cs-page{display:none;}
   .cs-page.active{display:block;}
@@ -780,7 +785,7 @@
   .arch-sum{background:var(--panel-2);border:1px solid var(--line);border-radius:7px;padding:8px 10px;
     font-family:var(--mono);font-size:11px;color:var(--muted);}
   .arch-sum span{display:block;font-size:18px;font-weight:800;color:var(--text);}
-  .arch-sum.hand{border-color:var(--cyan-dim);background:rgba(45,226,230,.06);}
+  .arch-sum.hand{border-color:var(--cyan-dim);background:rgba(var(--cyan-rgb),.06);}
   .arch-sum.hand span{color:var(--cyan);}
 
   /* ---------- MAKER ---------- */
@@ -797,7 +802,7 @@
     border-radius:7px;font-family:var(--mono);font-size:10px;font-weight:700;padding:7px 6px;cursor:pointer;letter-spacing:.3px;}
   .cb-actions button:active{transform:scale(.96);}
   .cb-actions .cb-sync{border-color:var(--cyan-dim);color:var(--cyan);}
-  .cb-actions .cb-sheet{border-color:rgba(255,176,32,.4);color:var(--amber);}
+  .cb-actions .cb-sheet{border-color:rgba(var(--amber-rgb),.4);color:var(--amber);}
 
   /* compact sheet overlay in combat */
   .cs-compact{padding:8px 0;}
@@ -831,7 +836,110 @@
   .combatant.pending{opacity:.4;position:relative;}
   .combatant.pending .expand{display:none;}
   .pending-tag{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--amber);
-    background:rgba(255,176,32,.12);border:1px solid rgba(255,176,32,.4);border-radius:5px;padding:2px 7px;margin-left:auto;flex:0 0 auto;}
+    background:rgba(var(--amber-rgb),.12);border:1px solid rgba(var(--amber-rgb),.4);border-radius:5px;padding:2px 7px;margin-left:auto;flex:0 0 auto;}
+  /* ============ THEMES ============
+     A theme is a set of variables. "Neon" is the original look (the :root defaults above, untouched).
+     Slate / Paper / Ember share the "modern" layer below: system sans, flat surfaces, one accent colour, soft radii.
+     --cyan / --red keep their *meaning* (ally / enemy-and-damage) in every theme; --accent is for actions and selection. */
+  html[data-theme="slate"]{
+    --bg:#14161b; --bg-rgb:20,22,27; --panel:#1c1f26; --panel-2:#252932; --line:#2f343f; --nav-bg:#181b21;
+    --text:#e9ebf0; --muted:#99a1af; --dim:#bcc3cf;
+    --accent:#8197ff; --accent-rgb:129,151,255; --on-accent:#0b1230; --focus:#8197ff;
+    --red:#ef6a6a; --red-dim:#5b2c31; --red-rgb:239,106,106; --red-text:#ff9d9d;
+    --cyan:#55c7c4; --cyan-dim:#24514f; --cyan-rgb:85,199,196;
+    --amber:#e9ae45; --amber-rgb:233,174,69; --good:#4cc58a; --good-rgb:76,197,138;
+    --ally-ring:#55c7c4; --enemy-ring:#ef6a6a; --ally-token:#1d8a90; --enemy-token:#c0392f; --on-ally:#06201f; --on-enemy:#2b0a0c; --ally-fill:#55c7c4; --enemy-fill:#ef6a6a; --track:#2a2e38; --card-shadow:0 1px 2px rgba(0,0,0,.35); --scrim:rgba(6,8,12,.66);
+  }
+  html[data-theme="paper"]{
+    --bg:#f2f3f6; --bg-rgb:242,243,246; --panel:#ffffff; --panel-2:#eceef3; --line:#d5d9e2; --nav-bg:#ffffff;
+    --text:#181b22; --muted:#596173; --dim:#3a4153;
+    --accent:#3452d1; --accent-rgb:52,82,209; --on-accent:#ffffff; --focus:#3452d1;
+    --red:#b92d35; --red-dim:#efb9bc; --red-rgb:185,45,53; --red-text:#a3222a;
+    --cyan:#076a70; --cyan-dim:#a5d3d5; --cyan-rgb:7,106,112;
+    --amber:#8a5300; --amber-rgb:138,83,0; --good:#19794a; --good-rgb:25,121,74;
+    --ally-ring:#0b9aa0; --enemy-ring:#cf3a40; --ally-token:#1d8a90; --enemy-token:#c0392f; --on-ally:#ffffff; --on-enemy:#ffffff; --ally-fill:#076a70; --enemy-fill:#b92d35; --track:#dfe2ea; --card-shadow:0 1px 2px rgba(20,28,45,.10),0 0 0 1px rgba(20,28,45,.02); --scrim:rgba(20,26,40,.42);
+  }
+  html[data-theme="ember"]{
+    --bg:#15120f; --bg-rgb:21,18,15; --panel:#1e1a16; --panel-2:#29231d; --line:#383027; --nav-bg:#1a1612;
+    --text:#f1eae1; --muted:#a09384; --dim:#cfc3b4;
+    --accent:#f2924a; --accent-rgb:242,146,74; --on-accent:#1f1004; --focus:#f2924a;
+    --red:#ee6a60; --red-dim:#5d2b26; --red-rgb:238,106,96; --red-text:#ffa097;
+    --cyan:#5cb8a5; --cyan-dim:#264a41; --cyan-rgb:92,184,165;
+    --amber:#e6b450; --amber-rgb:230,180,80; --good:#6cc788; --good-rgb:108,199,136;
+    --ally-ring:#5cb8a5; --enemy-ring:#e5584f; --ally-token:#2d8574; --enemy-token:#b8433a; --on-ally:#07201b; --on-enemy:#2b0b08; --ally-fill:#5cb8a5; --enemy-fill:#e5584f; --track:#2e2720; --card-shadow:0 1px 2px rgba(0,0,0,.4); --scrim:rgba(10,7,4,.68);
+  }
+
+  /* nav / header icons: SVG in the modern themes, the original emoji in Neon */
+  .ic-svg{display:none;} .ic-svg svg{width:22px;height:22px;display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+  html[data-ui="modern"] .ic-emoji{display:none;}
+  html[data-ui="modern"] .ic-svg{display:flex;align-items:center;justify-content:center;}
+
+  /* ---------- modern layer ---------- */
+  html[data-ui="modern"]{
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI","SF Pro Text",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:var(--sans); font-variant-numeric:tabular-nums;
+  }
+  html[data-ui="modern"] *{letter-spacing:0;}
+  html[data-ui="modern"] body{background:var(--bg);}
+  html[data-ui="modern"] header{background:rgba(var(--bg-rgb),.92);border-bottom:1px solid var(--line);padding:12px 16px;}
+  html[data-ui="modern"] .logo{font-size:17px;font-weight:700;letter-spacing:-.01em;}
+  html[data-ui="modern"] .logo .r{color:var(--accent);} html[data-ui="modern"] .logo .slash{color:var(--line);}
+  html[data-ui="modern"] h2,html[data-ui="modern"] .sl,html[data-ui="modern"] .tl-head{font-weight:600;letter-spacing:.05em;}
+  html[data-ui="modern"] input,html[data-ui="modern"] select,html[data-ui="modern"] textarea{border-radius:10px;font-size:15px;}
+  html[data-ui="modern"] input:focus,html[data-ui="modern"] textarea:focus,html[data-ui="modern"] select:focus{box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22);}
+  html[data-ui="modern"] .btn{border-radius:10px;font-weight:600;letter-spacing:0;}
+  html[data-ui="modern"] .btn.cyan{background:var(--accent);color:var(--on-accent);}
+  html[data-ui="modern"] .btn.ghost{background:var(--panel-2);border:1px solid var(--line);color:var(--text);}
+  html[data-ui="modern"] .grid-btn{border-radius:10px;background:var(--panel-2);}
+  html[data-ui="modern"] .grid-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(var(--accent-rgb),.12);}
+  html[data-ui="modern"] .grid-btn:active{border-color:var(--accent);}
+
+  html[data-ui="modern"] nav{border-top:1px solid var(--line);}
+  html[data-ui="modern"] nav button{font-size:10.5px;font-weight:600;gap:4px;padding:9px 0 10px;}
+  html[data-ui="modern"] nav button.active{color:var(--accent);}
+
+  html[data-ui="modern"] .seg button{border-radius:10px;font-weight:600;}
+  html[data-ui="modern"] .seg button.fsel{border-color:var(--accent);color:var(--accent);background:rgba(var(--accent-rgb),.10);}
+  html[data-ui="modern"] .col-head{border-radius:10px;font-weight:600;}
+  html[data-ui="modern"] .combatant,html[data-ui="modern"] .r-card,html[data-ui="modern"] .na-card{border-radius:12px;box-shadow:var(--card-shadow);}
+  html[data-ui="modern"] .combatant{border-left-width:3px;}
+  html[data-ui="modern"] .combatant.cover{background:var(--panel-2);border-left-color:var(--muted);}
+  html[data-ui="modern"] .combatant.active{box-shadow:0 0 0 2px var(--amber);}
+  html[data-ui="modern"] .hpbar{background:var(--track);height:8px;}
+  html[data-ui="modern"] .turnbar{border-radius:12px;box-shadow:var(--card-shadow);}
+  html[data-ui="modern"] .turnbar button.go{border-color:var(--accent);color:var(--accent);background:rgba(var(--accent-rgb),.12);}
+  html[data-ui="modern"] .shoot-btn{background:rgba(var(--red-rgb),.14);color:var(--red-text);border:1px solid rgba(var(--red-rgb),.45);border-radius:10px;font-weight:600;}
+  html[data-ui="modern"] .badge{border-radius:6px;font-weight:600;}
+  html[data-ui="modern"] .track{border-radius:10px;}
+  html[data-ui="modern"] details.addform{border-radius:12px;}
+  html[data-ui="modern"] details.setup[open]>summary{color:var(--accent);}
+
+  html[data-ui="modern"] .modal{background:var(--scrim);}
+  html[data-ui="modern"] .modal-panel{border-radius:18px 18px 0 0;}
+  html[data-ui="modern"] .modal-head h3{font-size:15px;font-weight:600;letter-spacing:0;}
+  html[data-ui="modern"] .toast button{background:var(--accent);color:var(--on-accent);}
+  html[data-ui="modern"] .die-ico{border-radius:12px;}
+  html[data-ui="modern"] .die-ico:active{background:var(--panel-2);border-color:var(--accent);}
+  html[data-ui="modern"] .mod-step:active{border-color:var(--accent);}
+
+  /* surfaces that were hard-coded for a dark UI */
+  html[data-ui="modern"] .tl-top{background:var(--panel-2);}
+  html[data-ui="modern"] .cover-static{background:var(--panel-2);color:var(--muted);border-color:var(--line);}
+  html[data-ui="modern"] .badge.cover{background:var(--panel-2);color:var(--dim);border:1px solid var(--line);}
+  html[data-ui="modern"] .badge.destroyed{background:var(--panel-2);color:var(--muted);border:1px solid var(--line);}
+  html[data-ui="modern"] .key:active{background:var(--panel-2);}
+  html[data-ui="modern"] .cover-toggle input{accent-color:var(--muted);}
+  html[data-ui="modern"] #gridInitStrip .gi-chip.gi-ally .gi-dot{background-color:var(--ally-fill);color:var(--on-ally);}
+  html[data-ui="modern"] #gridInitStrip .gi-chip.gi-enemy .gi-dot{background-color:var(--enemy-fill);color:var(--on-enemy);}
+
+  /* theme picker */
+  .theme-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .theme-card{background:var(--panel-2);border:2px solid var(--line);border-radius:14px;padding:10px;cursor:pointer;text-align:left;color:var(--text);font-family:var(--sans);}
+  .theme-card.on{border-color:var(--accent);}
+  .theme-card .tc-name{font-weight:600;font-size:14px;margin:8px 0 2px;} .theme-card .tc-desc{font-size:11px;color:var(--muted);line-height:1.35;}
+  .theme-swatch{height:52px;border-radius:9px;display:flex;overflow:hidden;border:1px solid rgba(128,128,128,.25);}
+  .theme-swatch i{flex:1;display:block;} .theme-swatch i.w2{flex:2;}
+
 </style>
 </head>
 <body>
@@ -839,8 +947,8 @@
 <div id="device">
 <header>
   <div class="logo"><span class="r">RED</span> <span class="slash">//</span> COMPANION</div>
-  <button class="grid-btn" style="margin-left:auto;" onclick="openTools()" title="Tools">🛠</button>
-  <button class="grid-btn" style="position:relative;" onclick="openCloudSync()" title="Cloud sync">☁<span id="gistStatusDot" style="display:none;position:absolute;top:3px;right:3px;width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 0 2px var(--panel-2);"></span></button>
+  <button class="grid-btn" style="margin-left:auto;" onclick="openTools()" title="Tools" aria-label="Tools"><span class="ic-emoji">🛠</span><span class="ic-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg></span></button>
+  <button class="grid-btn" style="position:relative;" onclick="openCloudSync()" title="Cloud sync" aria-label="Cloud sync"><span class="ic-emoji">☁</span><span class="ic-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 18.5a4.2 4.2 0 0 1-.7-8.3A5.6 5.6 0 0 1 17.4 9.6a4.45 4.45 0 0 1 .3 8.9z"/></svg></span><span id="gistStatusDot" style="display:none;position:absolute;top:3px;right:3px;width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 0 2px var(--panel-2);"></span></button>
 </header>
 
 <main>
@@ -962,9 +1070,9 @@
 <div id="toast" class="toast"><span id="toastMsg"></span><button onclick="doUndo()">UNDO</button></div>
 
 <nav>
-  <button class="active" onclick="showMapTab(this)"><span class="ic">🗺</span>MAP</button>
-  <button onclick="showView('dice',this)"><span class="ic">⚄</span>DICE</button>
-  <button onclick="showView('roster',this)"><span class="ic">◉</span>CHARS</button>
+  <button class="active" onclick="showMapTab(this)"><span class="ic ic-emoji">🗺</span><span class="ic-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg></span>MAP</button>
+  <button onclick="showView('dice',this)"><span class="ic ic-emoji">⚄</span><span class="ic-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="8.6" cy="8.6" r=".9" fill="currentColor"/><circle cx="15.4" cy="8.6" r=".9" fill="currentColor"/><circle cx="12" cy="12" r=".9" fill="currentColor"/><circle cx="8.6" cy="15.4" r=".9" fill="currentColor"/><circle cx="15.4" cy="15.4" r=".9" fill="currentColor"/></svg></span>DICE</button>
+  <button onclick="showView('roster',this)"><span class="ic ic-emoji">◉</span><span class="ic-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.7 3.1-6.2 7-6.2s7 2.5 7 6.2"/></svg></span>CHARS</button>
 </nav>
 </div><!-- /#device -->
 
@@ -1232,6 +1340,11 @@ function applyMapState(m){ if(!m||typeof m!=='object') return;
   if(Array.isArray(m.floorDeco)) G.floorDeco=m.floorDeco.filter(d=>d&&typeof d.type==='string'&&
     [d.x,d.y,d.w,d.h].every(Number.isFinite)); }
 
+/* current theme colour for canvas drawing (CSS variables don't reach <canvas>) */
+let _themeCache={};   /* cleared by setTheme() */
+function themeVar(name){ if(_themeCache[name]) return _themeCache[name];
+  return (_themeCache[name]=getComputedStyle(document.documentElement).getPropertyValue(name).trim()||'#888'); }
+
 /* ============ SECURE RNG ============ */
 function randInt(max){ const maxUnbiased=Math.floor(4294967296/max)*max; const buf=new Uint32Array(1); let x;
   do{ crypto.getRandomValues(buf); x=buf[0]; }while(x>=maxUnbiased); return (x%max)+1; }
@@ -1309,6 +1422,7 @@ function openTools(){
       toolsRow('goNotes','✎','Notes')
     )+
     toolsGroup('DISPLAY',
+      toolsRow('openThemePicker','◐','Theme: <span id="themeLabel">'+themeName()+'</span>')+
       toolsRow('toggleSimFromTools','▢','Mobile view: <span id="simLabel">'+(document.body.classList.contains('sim')?'ON':'OFF')+'</span>')
     );
   showModal('🛠 TOOLS',html);
@@ -2987,10 +3101,10 @@ function rollApplyDamage(){ const w=currentWeapon(); const t=find(shoot.targetId
   let aimedLine='';
   const dmgThrough=Math.max(0,total-(shoot.loc==='head'?t.headMax:t.bodyMax));
   if(shoot.aimType==='held' && dmgThrough>0 && !t.isCover){
-    aimedLine='<div class="crit-hit" style="color:var(--amber);border-color:rgba(255,176,32,.45);">⊘ AIMED: HELD ITEM — damage got through armor, target drops a held item of your choice.</div>';
+    aimedLine='<div class="crit-hit" style="color:var(--amber);border-color:rgba(var(--amber-rgb),.45);">⊘ AIMED: HELD ITEM — damage got through armor, target drops a held item of your choice.</div>';
     logEvent('⊘ '+t.name+' drops a held item (aimed shot)',''); }
   else if(shoot.aimType==='leg' && dmgThrough>0 && !t.isCover){
-    aimedLine='<div class="crit-hit" style="color:var(--amber);border-color:rgba(255,176,32,.45);">⊘ AIMED: LEG — damage got through armor, target\'s MOVE is halved until healed.</div>';
+    aimedLine='<div class="crit-hit" style="color:var(--amber);border-color:rgba(var(--amber-rgb),.45);">⊘ AIMED: LEG — damage got through armor, target\'s MOVE is halved until healed.</div>';
     /* record it as a condition (removable on the card) so the map's movement budget actually halves */
     if(!Array.isArray(t.conditions)) t.conditions=[];
     if(!t.conditions.some(x=>x&&x.name===LEG_HIT_COND)) t.conditions.push({name:LEG_HIT_COND,rounds:null});
@@ -3020,7 +3134,7 @@ function blastDodgeHtml(){
   const elig=shoot.multiIds.map(find).filter(t=>t&&!t.isCover&&t.canDodge&&t.hp>0);
   if(!elig.length) return '';
   const what=shoot.fireMode==='shell'?'THE SHELL':'THE BLAST';
-  return '<div class="death-box" style="border-color:var(--cyan-dim);background:rgba(45,226,230,.05);">'+
+  return '<div class="death-box" style="border-color:var(--cyan-dim);background:rgba(var(--cyan-rgb),.05);">'+
     '<div class="dl" style="color:var(--cyan);">REF 8+ MAY DODGE '+what+' — must roll over '+shoot.blastAtk+'</div>'+
     '<div id="blastDodgeList">'+blastDodgeRows()+'</div></div>'; }
 /* a missed grenade / rocket deviates: its new centre is a random square of the
@@ -3052,7 +3166,7 @@ function blastScatter(w){
   const dist=Math.max(Math.abs(dx),Math.abs(dy))*2;
   const where=(dx||dy)?('deviated '+dist+' m '+compass):'held roughly on the mark';
   const who=chars.length?chars.map(c=>esc(c.name)).join(', '):'no one';
-  return '<div class="crit-hit" style="color:var(--amber);border-color:rgba(255,176,32,.45);">'+
+  return '<div class="crit-hit" style="color:var(--amber);border-color:rgba(var(--amber-rgb),.45);">'+
     '💥 SCATTERED — the '+esc(w.name||'blast')+' '+where+
     '. New 10 m area catches '+who+(covers.length?' · '+covers.length+' cover':'')+'.</div>';
 }
@@ -3124,7 +3238,7 @@ function rollApplyArea(){ const w=currentWeapon();
 function showAmmoCheck(w,am,targets){
   const names=targets.map(t=>esc(t.name)).join(', ');
   document.getElementById('shootDmg').innerHTML=
-    '<div class="death-box" style="border-color:var(--amber);background:rgba(255,176,32,.06);">'+
+    '<div class="death-box" style="border-color:var(--amber);background:rgba(var(--amber-rgb),.06);">'+
     '<div class="dl" style="color:var(--amber);">'+esc(am.label).toUpperCase()+' — NO DAMAGE DEALT<br>'+
     names+' must beat <b>DV'+am.check.dv+' '+esc(am.check.skill)+'</b><br>On a failure: '+esc(am.check.fail)+'</div>'+
     '<div class="death-row"><span class="ign-field">their total <input id="ammoDef" type="number" inputmode="numeric" placeholder="0"></span>'+
@@ -3175,7 +3289,7 @@ function rollSuppression(w,s,res){
   const affected=onMap?defenders.filter(d=>st(d.id)&&st(d.id).affected):[];
   const allBtn=affected.length?'<button class="btn ghost wide" style="margin-top:6px;" onclick="suppressResolveAll()">⚅ ROLL ALL '+affected.length+' EXPOSED ENEM'+(affected.length===1?'Y':'IES')+' IN RANGE</button>':'';
   const dw=document.getElementById('shootDmg'); dw.classList.remove('hidden');
-  dw.innerHTML='<div class="death-box" style="border-color:var(--cyan-dim);background:rgba(45,226,230,.05);">'+
+  dw.innerHTML='<div class="death-box" style="border-color:var(--cyan-dim);background:rgba(var(--cyan-rgb),.05);">'+
     '<div class="dl" style="color:var(--cyan);">EVERYONE ON FOOT WITHIN 25 M, OUT OF COVER, IN LINE OF SIGHT<br>'+
     'must beat '+atk.total+' with WILL + Concentration + 1d10 — or spend their next Move getting to cover</div>'+
     '<div class="death-row">'+defPicker+
@@ -3423,7 +3537,7 @@ function cardHtml(c){ const pct=Math.max(0,Math.min(100,Math.round(c.hp/c.hpMax*
     badges.push('<span class="badge behind">▨ behind '+esc(cv.name)+(cv.hp<=0?' (destroyed)':'')+seatLabel+'</span>'); }
   if(c.isCover&&c.isVehicle){
     const seatCount=combatants.filter(x=>x.behindCoverId===c.id).length;
-    badges.push('<span class="badge" style="background:rgba(255,176,32,.12);color:var(--amber);border-color:rgba(255,176,32,.4);">🪑 '+seatCount+'/'+(c.vehicleSeats||'?')+' seated</span>');
+    badges.push('<span class="badge" style="background:rgba(var(--amber-rgb),.12);color:var(--amber);border-color:rgba(var(--amber-rgb),.4);">🪑 '+seatCount+'/'+(c.vehicleSeats||'?')+' seated</span>');
   }
   if(c.canDodge&&!c.isCover)badges.push('<span class="badge dodge">↷ CAN DODGE '+dodgeValueOf(c)+'</span>');
   if(c.onFire)badges.push('<button type="button" class="badge wounded" aria-label="Put out the fire on '+esc(c.name)+'" onclick="douse(\''+c.id+'\')">🔥 ON FIRE — 2/turn<span class="xi" aria-hidden="true">✕</span></button>');
@@ -3440,7 +3554,7 @@ function cardHtml(c){ const pct=Math.max(0,Math.min(100,Math.round(c.hp/c.hpMax*
     if(_ca.spotWeakness) _parts.push('+'+_ca.spotWeakness+' dmg');
     if(_ca.damageDeflection) _parts.push('-'+CA_ABILITIES[0].bonusVal(_ca.damageDeflection)+' def');
     if(_ca.fumbleRecovery>=4) _parts.push('no fumble');
-    if(_parts.length) badges.push('<span class="badge" style="background:rgba(255,176,32,.12);color:var(--amber);border-color:rgba(255,176,32,.4);">⚔ CA: '+_parts.join(', ')+'</span>');
+    if(_parts.length) badges.push('<span class="badge" style="background:rgba(var(--amber-rgb),.12);color:var(--amber);border-color:rgba(var(--amber-rgb),.4);">⚔ CA: '+_parts.join(', ')+'</span>');
   }
   if(mortal)badges.push('<span class="badge mortal">☠ MORTALLY WOUNDED</span>');
   else if(down)badges.push('<span class="badge '+(c.isCover?'destroyed':'down')+'">'+(c.isCover?'DESTROYED':'DOWN')+'</span>');
@@ -3558,7 +3672,7 @@ function cardHtml(c){ const pct=Math.max(0,Math.min(100,Math.round(c.hp/c.hpMax*
     /* Medtech Speedheal: available if they have the Medtech role with Speedheal (index 2) chosen */
     const medRole=c.roles?c.roles.find(rr=>rr.role==='Medtech'):null;
     const hasSpeedheal=medRole&&medRole.data&&Array.isArray(medRole.data.pharmaChosen)&&medRole.data.pharmaChosen.indexOf(2)>=0;
-    const medBlock=hasSpeedheal?'<div class="cb-actions"><button class="cb-sheet" style="border-color:rgba(45,226,230,.4);color:var(--cyan);" onclick="openSpeedheal(\''+c.id+'\')">💉 APPLY SPEEDHEAL</button></div>':'';
+    const medBlock=hasSpeedheal?'<div class="cb-actions"><button class="cb-sheet" style="border-color:rgba(var(--cyan-rgb),.4);color:var(--cyan);" onclick="openSpeedheal(\''+c.id+'\')">💉 APPLY SPEEDHEAL</button></div>':'';
     const caBlock=c.combatAwareness&&c.combatAwareness.rank?
       '<details class="setup" style="margin-top:6px;"><summary><span class="caret" aria-hidden="true">▸</span>COMBAT AWARENESS — '+
       caPointsLeft(c.combatAwareness)+'/'+c.combatAwareness.rank+' pts free</summary>'+
@@ -3623,7 +3737,7 @@ function cardHtml(c){ const pct=Math.max(0,Math.min(100,Math.round(c.hp/c.hpMax*
         if(c.isCover||down||!c.behindCoverId||c.seatRole!=='driver') return '';
         const veh=find(c.behindCoverId);
         if(!veh||!veh.isVehicle) return '';
-        return '<button class="shoot-btn" style="background:rgba(255,176,32,.15);color:var(--amber);border-color:rgba(255,176,32,.4);" onclick="openRam(\''+c.id+'\')">🚗 RAM</button>';
+        return '<button class="shoot-btn" style="background:rgba(var(--amber-rgb),.15);color:var(--amber);border-color:rgba(var(--amber-rgb),.4);" onclick="openRam(\''+c.id+'\')">🚗 RAM</button>';
       })()+
       /* NET arch shortcut for runners */
       (function(){
@@ -4009,7 +4123,7 @@ function csRenderRolesUI(){
           '<select id="haggleRank_'+i+'" class="sk-lvl" style="width:52px;" onchange="updateHagglePerk('+i+')">'+
           Array.from({length:rank},(_, k)=>rank-k).map(rk=>'<option value="'+rk+'"'+(rk===rank?' selected':'')+'>'+rk+'</option>').join('')+
           '</select></div>'+
-        '<div id="hagglePerk_'+i+'" style="font-size:11px;color:var(--cyan);font-family:var(--mono);margin:2px 0 6px;line-height:1.4;padding:6px 8px;background:rgba(45,226,230,.05);border:1px solid var(--cyan-dim);border-radius:6px;">'+
+        '<div id="hagglePerk_'+i+'" style="font-size:11px;color:var(--cyan);font-family:var(--mono);margin:2px 0 6px;line-height:1.4;padding:6px 8px;background:rgba(var(--cyan-rgb),.05);border:1px solid var(--cyan-dim);border-radius:6px;">'+
           esc(getOperatorTier(rank).haggle)+'</div>'+
         '<div class="ra-row" style="border:none;padding:2px 0;"><div class="ra-label">Opponent total (their COOL+Trading+Rank+d10 result, or just their bonus)</div>'+
           '<input type="number" inputmode="numeric" id="haggleOpp_'+i+'" class="sk-lvl" style="width:52px;" placeholder="0"></div>'+
@@ -4086,7 +4200,7 @@ function csRenderRolesUI(){
           medRow('Pharmaceuticals','pharma',m.pharma,'1 Med Tech per point (max 5), unlocks a drug','')+
           medRow('Cryosystem Op','cryo',m.cryo,'1 Med Tech per point (max 5), cryo gear','')+
         '</div>'+
-        '<div style="font-size:11px;color:var(--cyan);font-family:var(--mono);margin:6px 0;padding:6px 8px;background:rgba(45,226,230,.05);border:1px solid var(--cyan-dim);border-radius:6px;">'+
+        '<div style="font-size:11px;color:var(--cyan);font-family:var(--mono);margin:6px 0;padding:6px 8px;background:rgba(var(--cyan-rgb),.05);border:1px solid var(--cyan-dim);border-radius:6px;">'+
           'Surgery Skill: '+medSurgerySkill(m)+' · Medical Tech Skill: '+medTechSkill(m)+' (pharma '+m.pharma+' + cryo '+m.cryo+')</div>'+
         '<div class="ra-row" style="border:none;padding:6px 0 2px;"><div class="ra-label" style="font-size:11px;">Situational mod</div>'+
           '<input type="number" inputmode="numeric" id="medMod_'+i+'" class="sk-lvl" style="width:52px;" placeholder="0"></div>'+
@@ -4124,7 +4238,7 @@ function csRenderRolesUI(){
         const chartRows=cls.rows.map((row,ri)=>{
           const sel=(tm.statRow===ri);
           const cells=STAT_KEYS.map(k=>'<td style="padding:3px 4px;text-align:center;">'+(row[k]||0)+'</td>').join('');
-          return '<tr class="tm-chart-row edit-only" style="cursor:pointer;'+(sel?'background:rgba(45,226,230,.12);':'')+'" onclick="csTeamSetRow('+ti+','+ri+')">'+
+          return '<tr class="tm-chart-row edit-only" style="cursor:pointer;'+(sel?'background:rgba(var(--cyan-rgb),.12);':'')+'" onclick="csTeamSetRow('+ti+','+ri+')">'+
             '<td style="padding:3px 5px;font-weight:700;color:'+(sel?'var(--cyan)':'var(--amber)')+';">'+(ri+1)+'</td>'+cells+'</tr>';
         }).join('');
         const chartHead='<tr><th style="padding:3px 5px;font-size:9px;color:var(--muted);">ROLL</th>'+
@@ -4180,7 +4294,7 @@ function csRenderRolesUI(){
           '<div style="margin-top:6px;"><div class="sl2" style="color:var(--cyan);">GAINING</div>'+
             LOYALTY_GAIN.map(l=>'<div style="display:flex;justify-content:space-between;font-size:10px;font-family:var(--mono);color:var(--muted);padding:2px 0;border-bottom:1px solid var(--line);"><span>'+esc(l.act)+'</span><b style="color:var(--cyan);">'+l.val+'</b></div>').join('')+
             '<div class="sl2" style="color:var(--red);margin-top:8px;">LOSING</div>'+
-            LOYALTY_LOSS.map(l=>'<div style="display:flex;justify-content:space-between;font-size:10px;font-family:var(--mono);color:var(--muted);padding:2px 0;border-bottom:1px solid var(--line);"><span>'+esc(l.act)+'</span><b style="color:#ff8a92;">'+l.val+'</b></div>').join('')+
+            LOYALTY_LOSS.map(l=>'<div style="display:flex;justify-content:space-between;font-size:10px;font-family:var(--mono);color:var(--muted);padding:2px 0;border-bottom:1px solid var(--line);"><span>'+esc(l.act)+'</span><b style="color:var(--red-text);">'+l.val+'</b></div>').join('')+
           '</div></details></div>';
     } else if(r.role==='Netrunner'){
       const rank=r.rank||0;
@@ -4463,7 +4577,7 @@ function rollBackupCall(rank,roleIdx){
     '<div style="font-size:11px;color:var(--muted);margin-top:2px;max-width:280px;line-height:1.4;">'+esc(tier.desc)+'<br>'+
       '<span style="color:var(--text);">CN '+tier.cn+' · SP '+tier.sp+' · HP '+tier.hp+' · MOVE/BODY '+tier.move+'</span><br>'+
       tier.count+(tier.count>1?' units':' unit')+'</div>'+
-    '<button style="margin-top:10px;padding:8px 14px;background:rgba(45,226,230,.08);border:1px solid var(--cyan-dim);color:var(--cyan);'+
+    '<button style="margin-top:10px;padding:8px 14px;background:rgba(var(--cyan-rgb),.08);border:1px solid var(--cyan-dim);color:var(--cyan);'+
       'border-radius:7px;font-family:var(--mono);font-size:11px;font-weight:700;cursor:pointer;" '+
       'onclick="spawnPendingBackup();this.closest(\'.sk-result\').remove();">'+
       '→ ADD TO ENCOUNTER (arrive round '+arriveRound+')</button>';
@@ -5793,7 +5907,7 @@ function vsRenderMountedList(){
       '<span style="flex:1;font-size:12px;font-weight:700;">'+esc(w.name)+'</span>'+
       '<span style="font-family:var(--mono);font-size:10px;color:var(--muted);">'+esc(w.dmg)+(w.mag?' · mag '+w.mag:'')+'</span>'+
       '<span style="font-family:var(--mono);font-size:10px;color:var(--amber);">'+esc(w.firedBy||'gunner')+'</span>'+
-      '<button style="background:var(--panel);border:1px solid var(--red-dim);color:#ff8a92;border-radius:5px;font-size:10px;padding:2px 6px;cursor:pointer;" onclick="vsRemoveMount('+i+')">✕</button></div>'
+      '<button style="background:var(--panel);border:1px solid var(--red-dim);color:var(--red-text);border-radius:5px;font-size:10px;padding:2px 6px;cursor:pointer;" onclick="vsRemoveMount('+i+')">✕</button></div>'
   ).join('');
 }
 function vsAddMountWeapon(){
@@ -6245,7 +6359,7 @@ function openCloudSync(){
     (lastSync?'<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:10px;">Last sync: '+esc(lastSync)+'</div>':'')+
 
     (gistSyncState==='conflict'?
-      '<div style="background:rgba(255,176,32,.1);border:1px solid var(--amber);border-radius:8px;padding:10px;margin-bottom:10px;">'+
+      '<div style="background:rgba(var(--amber-rgb),.1);border:1px solid var(--amber);border-radius:8px;padding:10px;margin-bottom:10px;">'+
         '<div style="font-family:var(--mono);font-size:11px;color:var(--amber);margin-bottom:8px;">Another device synced newer changes that this one hasn\'t loaded yet. Auto-sync is paused so nothing gets overwritten.</div>'+
         '<div style="display:flex;gap:8px;">'+
           '<button class="btn cyan sm" style="flex:1;" onclick="cloudSyncLoad()">⇩ LOAD THEIRS FIRST</button>'+
@@ -6767,7 +6881,7 @@ function runArchitecture(id){
           const canAttack=p.cls==='Attacker'||p.cls==='Black ICE';
           const state=a.programStates[pi]||{rez:p.rez,rezMax:p.rez,rezzed:false,usedThisTurn:false};
           const isDerezzed=state.rez<=0;
-          const bg=isDerezzed?'opacity:0.4;':state.rezzed?'background:rgba(45,226,230,.06);':'';
+          const bg=isDerezzed?'opacity:0.4;':state.rezzed?'background:rgba(var(--cyan-rgb),.06);':'';
           html+='<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--line);'+bg+'flex-wrap:wrap;">'+
             '<b style="font-size:11px;flex:1;min-width:100px;">'+esc(p.name)+' <span style="font-family:var(--mono);font-size:9px;color:'+clsColor+';">'+esc(p.cls)+'</span>'+
               (state.rezzed?' <span style="color:var(--cyan);font-size:9px;">● REZZED</span>':'')+
@@ -6806,9 +6920,9 @@ function runArchitecture(id){
       const derez=f.rez!=null && f.rez<=0;
       content='ICE: '+f.ice+(ice?' <span style="color:var(--muted);">(PER '+ice.per+' SPD '+ice.spd+' ATK '+ice.atk+' DEF '+ice.def+' REZ '+f.rez+'/'+f.rezMax+')</span>':'')+(derez?' <span style="color:var(--red);">DEREZZED</span>':''); icon='⚠';
       if(ice && !derez){
-        attackBtns='<button class="mini-btn" style="background:rgba(255,138,146,.15);color:#ff8a92;" onclick="archIceAttack(\''+a.id+'\','+i+')" title="ICE attacks the runner">⚔</button>'+
+        attackBtns='<button class="mini-btn" style="background:rgba(255,138,146,.15);color:var(--red-text);" onclick="archIceAttack(\''+a.id+'\','+i+')" title="ICE attacks the runner">⚔</button>'+
           '<button class="mini-btn" style="background:rgba(157,92,255,.15);color:#c9a4ff;" onclick="archAttackIce(\''+a.id+'\','+i+')" title="Runner attacks the ICE with a program">🎯</button>'+
-          '<button class="mini-btn" style="background:rgba(45,226,230,.12);color:var(--cyan);" onclick="archSlideCheck(\''+a.id+'\','+i+')" title="Slide away from ICE">⇤</button>';
+          '<button class="mini-btn" style="background:rgba(var(--cyan-rgb),.12);color:var(--cyan);" onclick="archSlideCheck(\''+a.id+'\','+i+')" title="Slide away from ICE">⇤</button>';
       }
     }
     else if(f.type==='Demon'){
@@ -6817,7 +6931,7 @@ function runArchitecture(id){
       const derez=f.rez!=null && f.rez<=0;
       content='Demon: '+f.demon+(dm?' <span style="color:var(--muted);">(Iface '+dm.iface+' Acts '+dm.acts+' CN '+dm.cn+' REZ '+f.rez+'/'+f.rezMax+')</span>':'')+(derez?' <span style="color:var(--red);">DEREZZED</span>':''); icon='👹';
       if(dm && !derez){
-        attackBtns='<button class="mini-btn" style="background:rgba(255,138,146,.15);color:#ff8a92;" onclick="archDemonZap(\''+a.id+'\','+i+')" title="Demon Zaps runner">⚡</button>'+
+        attackBtns='<button class="mini-btn" style="background:rgba(255,138,146,.15);color:var(--red-text);" onclick="archDemonZap(\''+a.id+'\','+i+')" title="Demon Zaps runner">⚡</button>'+
           '<button class="mini-btn" style="background:rgba(157,92,255,.15);color:#c9a4ff;" onclick="archAttackIce(\''+a.id+'\','+i+')" title="Runner attacks the Demon">🎯</button>';
       }
     }
@@ -7358,7 +7472,7 @@ function csArmorPick(loc){
 function csShowCustomArmor(loc){
   const box=document.getElementById('csCustomArmor');
   box.style.display='';
-  box.innerHTML='<div style="border:1px solid var(--cyan-dim);border-radius:8px;padding:10px;margin-top:6px;background:rgba(45,226,230,.04);">'+
+  box.innerHTML='<div style="border:1px solid var(--cyan-dim);border-radius:8px;padding:10px;margin-top:6px;background:rgba(var(--cyan-rgb),.04);">'+
     '<div class="sl2">CUSTOM '+loc.toUpperCase()+' ARMOR</div>'+
     '<div class="cs-row"><div class="field" style="flex:2;"><label class="sl">NAME</label><input id="csCustArmorName" placeholder="Custom armor"></div>'+
       '<div class="field"><label class="sl">SP</label><input id="csCustArmorSP" type="number" inputmode="numeric" placeholder="0"></div>'+
@@ -7500,7 +7614,7 @@ function openCharSheet(id,startReadOnly){
     '<div class="cs-page" id="csPage_cyber">'+
       '<div class="cs-section"><div class="sl2">INJURIES</div>'+
         ((d.injuries&&d.injuries.length)?
-          d.injuries.map((inj,i)=>'<div class="cs-wpn" style="border-left:3px solid #ff8a92;"><div class="cw-info"><b style="color:#ff8a92;">☠ '+esc(inj)+'</b></div>'+
+          d.injuries.map((inj,i)=>'<div class="cs-wpn" style="border-left:3px solid var(--red-text);"><div class="cw-info"><b style="color:var(--red-text);">☠ '+esc(inj)+'</b></div>'+
             '<button class="mini-btn" onclick="csRemoveInjury('+i+')">✕</button></div>').join('')
           :'<div style="color:var(--muted);font-size:12px;font-family:var(--mono);">No injuries.</div>')+'</div>'+
       '<div class="cs-section"><div class="sl2">CYBERWARE</div>'+
@@ -8105,7 +8219,7 @@ function renderRoster(){
         (c.canDodge?' · ↷ dodges':'')+
         (c.humanity!=null?' · HUM '+c.humanity+'/'+c.humanityMax:'')+
         (c.eurodollars?' · '+c.eurodollars+'eb':'')+
-        ((c.injuries&&c.injuries.length)?' · <span style="color:#ff8a92;">'+c.injuries.length+' injuries</span>':'')+
+        ((c.injuries&&c.injuries.length)?' · <span style="color:var(--red-text);">'+c.injuries.length+' injuries</span>':'')+
         '<br>'+esc(wpnSummary)+(armorSummary?'<br>🛡 '+esc(armorSummary):'')+'</div>'+
       '<div class="r-actions">'+
         '<button class="r-edit" onclick="openCharSheet(\''+c.id+'\',true)">▤ OPEN</button>'+
@@ -8447,7 +8561,7 @@ function viewCombatSheet(combatId){
   const inj=c.injuries||[];
   if(inj.length){
     html+='<div class="csc-cat">INJURIES</div>';
-    inj.forEach(i=>{ html+='<div class="csc-row"><span class="csc-name" style="color:#ff8a92;">☠ '+esc(i)+'</span></div>'; });
+    inj.forEach(i=>{ html+='<div class="csc-row"><span class="csc-name" style="color:var(--red-text);">☠ '+esc(i)+'</span></div>'; });
   }
   /* cyberware / gear */
   if(r.cyberware) html+='<div class="csc-cat">CYBERWARE</div><div style="font-size:12px;color:var(--muted);white-space:pre-wrap;">'+esc(r.cyberware)+'</div>';
@@ -8482,7 +8596,7 @@ function viewBasicSheet(c){
   }
   const inj=c.injuries||[];
   if(inj.length){ html+='<div class="csc-cat">INJURIES</div>';
-    inj.forEach(i=>{ html+='<div class="csc-row"><span class="csc-name" style="color:#ff8a92;">☠ '+esc(i)+'</span></div>'; }); }
+    inj.forEach(i=>{ html+='<div class="csc-row"><span class="csc-name" style="color:var(--red-text);">☠ '+esc(i)+'</span></div>'; }); }
   const con=c.conditions||[];
   if(con.length){ html+='<div class="csc-cat">CONDITIONS</div>';
     con.forEach(x=>{ html+='<div class="csc-row"><span class="csc-name">• '+esc(x.name)+(x.rounds?' ('+x.rounds+' rd)':'')+'</span></div>'; }); }
@@ -8556,7 +8670,7 @@ function gridFitUpdate(){
   }
   const ally=(function(){ const t=G.sel?find(G.sel):null; return t&&t.side!=='enemy'; })();
   ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2);
-  ctx.strokeStyle=ally?'#00e5ff':'#ff4444'; ctx.lineWidth=3; ctx.stroke();
+  ctx.strokeStyle=ally?themeVar('--ally-ring'):themeVar('--enemy-ring'); ctx.lineWidth=3; ctx.stroke();
   ctx.strokeStyle='rgba(255,255,255,.12)'; ctx.lineWidth=1;
   ctx.strokeRect(cx-R,cy-R,R*2,R*2);
   gridDraw();
@@ -10136,7 +10250,7 @@ function gridDraw(){
       grd.addColorStop(1,'transparent');
       ctx.fillStyle=grd; ctx.fill();
       shapePath(cx,cy,r+4);
-      ctx.strokeStyle=isAlly?'#00e5ff':'#ff4444';
+      ctx.strokeStyle=isAlly?themeVar('--ally-ring'):themeVar('--enemy-ring');
       ctx.lineWidth=2.5; ctx.stroke();
     }
 
@@ -10166,7 +10280,7 @@ function gridDraw(){
         ctx.restore();
         /* colored border ring */
         shapePath(cx,cy,r);
-        ctx.strokeStyle=isAlly?'#00e5ff':'#ff4444';
+        ctx.strokeStyle=isAlly?themeVar('--ally-ring'):themeVar('--enemy-ring');
         ctx.lineWidth=2.5; ctx.stroke();
         drewImage=true;
       }
@@ -10175,9 +10289,9 @@ function gridDraw(){
     if(!drewImage){
       /* solid color token body */
       shapePath(cx,cy,r);
-      ctx.fillStyle=dead?'#2a2a2a':(isAlly?'#0099cc':'#cc2222');
+      ctx.fillStyle=dead?'#2a2a2a':(isAlly?themeVar('--ally-token'):themeVar('--enemy-token'));
       ctx.fill();
-      ctx.strokeStyle=dead?'#444':(isAlly?'#00e5ff':'#ff4444');
+      ctx.strokeStyle=dead?'#444':(isAlly?themeVar('--ally-ring'):themeVar('--enemy-ring'));
       ctx.lineWidth=2; ctx.stroke();
 
       /* initials */
@@ -10307,7 +10421,7 @@ function gridDraw(){
       /* soft vignette so the target rings pop */
       ctx.fillStyle='rgba(6,8,12,.32)'; ctx.fillRect(0,0,w,h);
       ctx.beginPath(); ctx.arc(sp.x,sp.y,c*0.45,0,Math.PI*2);
-      ctx.strokeStyle='#00e5ff'; ctx.lineWidth=2.5; ctx.stroke();
+      ctx.strokeStyle=themeVar('--ally-ring'); ctx.lineWidth=2.5; ctx.stroke();
       const drawList=gridShotTargets().slice();
       /* also draw whatever cover the cursor is over, even if it isn't shielding anyone */
       const hov=G.hoverId?find(G.hoverId):null;
@@ -10346,7 +10460,7 @@ function gridDraw(){
       ctx.font='bold 12px sans-serif'; ctx.textAlign='left'; ctx.textBaseline='top';
       const lw=ctx.measureText(lab).width;
       ctx.fillStyle='rgba(0,0,0,.7)'; ctx.beginPath(); ctx.roundRect(10,10,lw+14,20,4); ctx.fill();
-      ctx.fillStyle='#00e5ff'; ctx.fillText(lab,17,15);
+      ctx.fillStyle=themeVar('--ally-ring'); ctx.fillText(lab,17,15);
     }
   }
 
@@ -10463,6 +10577,14 @@ function gridBindEvents(cv){
   cv.addEventListener('pointercancel',gridPUp);
   cv.addEventListener('pointerleave',()=>{ if(G.hoverId||G.hoverCell){ G.hoverId=null; G.hoverCell=null; gridDraw(); } });
   cv.addEventListener('wheel',gridWheel,{passive:false});
+  /* The canvas is a flex item, so its CSS size follows the layout (a status line appearing, the toolbar wrapping,
+     the keyboard...). Its pixel buffer used to be sized only at a few fixed moments, so any later layout change
+     left it stretched (tokens ~9% squashed). Refit whenever the real size changes. Safe from feedback loops:
+     the CSS size is flex-driven, so changing the buffer size cannot change the layout. */
+  if(typeof ResizeObserver!=='undefined'){ let raf=0;
+    new ResizeObserver(()=>{ cancelAnimationFrame(raf); raf=requestAnimationFrame(()=>{
+      const ov=document.getElementById('gridOverlay');
+      if(ov&&ov.classList.contains('open')&&gridFitCanvas()) gridDraw(); }); }).observe(cv); }
 }
 
 function gridPtrXY(e){
@@ -12296,6 +12418,31 @@ const EXAMPLE_ENCOUNTERS=[
    {template:'Heavy Boss',name:'"Wire" (Cyberpsycho)',hp:70,sp:14,cn:15,weapons:['Heavy SMG','Very Heavy Melee'],ai:{profile:'berserker',focus:'biggest threat',notes:'Ignores cover and never retreats. Charges to melee, fires the SMG while closing. Screams at whoever hurt him last.'}}],
   rewards:{eb:500,ip:12,notes:'NCPD bounty.',bonuses:[{label:'Subdued non-lethally (Psycho Squad pays double)',eb:500,ip:3}]}}}
 ];
+
+/* ============ THEMES ============
+   Palettes live in CSS (html[data-theme=...]); this is just the registry, persistence and the picker.
+   The attribute is also set before first paint by a tiny script in <head>, so there is no flash of the wrong theme. */
+const THEMES=[
+  {id:'slate',name:'Slate',desc:'Clean dark with a soft blue accent. The default.',sw:['#14161b','#252932','#8197ff','#55c7c4','#ef6a6a']},
+  {id:'paper',name:'Paper',desc:'Light and high-contrast, for bright rooms.',sw:['#f2f3f6','#ffffff','#3452d1','#0b7f84','#cf3a40']},
+  {id:'ember',name:'Ember',desc:'Warm dark with an orange accent.',sw:['#15120f','#29231d','#f2924a','#5cb8a5','#e5584f']},
+  {id:'neon',name:'Neon',desc:'The original black, cyan and red.',sw:['#0a0a0c','#1c1c23','#ff2b3d','#2de2e6','#ffb020']}
+];
+function currentTheme(){ const t=document.documentElement.getAttribute('data-theme'); return THEMES.some(x=>x.id===t)?t:'slate'; }
+function themeName(){ return (THEMES.find(t=>t.id===currentTheme())||THEMES[0]).name; }
+function setTheme(id){
+  if(!THEMES.some(t=>t.id===id)) id='slate';
+  const h=document.documentElement; h.setAttribute('data-theme',id); h.setAttribute('data-ui',id==='neon'?'classic':'modern');
+  store.set('cpred_theme',id); _themeCache={};
+  const m=document.querySelector('meta[name="theme-color"]'); if(m) m.setAttribute('content',themeVar('--bg'));
+  try{ gridDraw(); }catch(e){} }
+function openThemePicker(){
+  const cur=currentTheme();
+  showModal('Appearance','<div class="theme-grid">'+THEMES.map(t=>
+    '<button class="theme-card'+(t.id===cur?' on':'')+'" onclick="setTheme(\''+t.id+'\');openThemePicker()" aria-pressed="'+(t.id===cur)+'">'+
+    '<div class="theme-swatch">'+t.sw.map((c,i)=>'<i'+(i===0?' class="w2"':'')+' style="background:'+c+'"></i>').join('')+'</div>'+
+    '<div class="tc-name">'+t.name+(t.id===cur?' ✓':'')+'</div><div class="tc-desc">'+t.desc+'</div></button>').join('')+'</div>'+
+    '<div class="hint" style="margin-top:12px;">Saved on this device. Your data and backups are not affected.</div>'); }
 
 /* ============ INIT ============ */
 setSide('enemy');

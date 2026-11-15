@@ -7,7 +7,8 @@ const TEST_CHAR = path.resolve(__dirname, '..', 'test-character.json');
 
 async function launch(opts = {}) {
   const browser = await chromium.launch();
-  const ctx = await browser.newContext({ viewport: { width: 420, height: 900 } });
+  const ctx = await browser.newContext({ viewport: opts.viewport || { width: 420, height: 900 } });
+  if (opts.theme) await ctx.addInitScript(t => { try { if (!localStorage.getItem('cpred_theme')) localStorage.setItem('cpred_theme', t); } catch (e) {} }, opts.theme);   // seed only if unset: a first visit, not an override on every load
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message.split('\n')[0]));
@@ -18,8 +19,8 @@ async function launch(opts = {}) {
 }
 
 /* tiny assertion runner: each check is [name, async fn]; exits non-zero on any failure */
-async function run(title, checks) {
-  const { browser, page, errors } = await launch();
+async function run(title, checks, opts = {}) {
+  const { browser, page, errors } = await launch(opts);
   let failed = 0;
   for (const [name, fn] of checks) {
     const before = errors.length;
