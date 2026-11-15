@@ -1204,14 +1204,33 @@
 
 <script>
 /* ============ STORAGE ============ */
+/* A write that fails (storage full, or storage blocked) used to be swallowed: the data lived
+   only in memory, reads went to the stale localStorage copy, and the next reload silently rolled
+   everything back. Now a failed key is served from memory until a write succeeds, and the user is
+   told — once a minute — that their changes are NOT being saved. */
 const store=(()=>{ let ok=true; try{localStorage.setItem('__t','1');localStorage.removeItem('__t');}catch(e){ok=false;}
-  const mem={}; return {get(k){try{return ok?localStorage.getItem(k):(mem[k]??null);}catch(e){return mem[k]??null;}},
-  set(k,v){try{ok?localStorage.setItem(k,v):(mem[k]=v);}catch(e){mem[k]=v;}}}; })();
+  const mem={}; let lastWarn=0;
+  function warn(){ const now=Date.now(); if(now-lastWarn<60000) return; lastWarn=now;
+    try{ toast(ok?'⚠ Storage full — changes are NOT being saved. Download a Full backup now (🛠 Tools).'
+                 :'⚠ Browser storage is blocked — nothing will be saved. Download a Full backup before closing.');
+      clearTimeout(toastTimer); toastTimer=setTimeout(hideToast,10000); }catch(e){} }
+  return {get(k){ if(k in mem) return mem[k]; try{return ok?localStorage.getItem(k):null;}catch(e){return null;}},
+  set(k,v){ if(ok){ try{ localStorage.setItem(k,v); delete mem[k]; return true; }catch(e){ mem[k]=v; warn(); return false; } }
+    mem[k]=v; warn(); return false; }}; })();
 function save(skipAutoSync){ store.set('cpred_combat',JSON.stringify(combatants)); store.set('cpred_notes',JSON.stringify(notesData));
   store.set('cpred_sort',sortMode); store.set('cpred_turn',JSON.stringify({round:roundNo,activeId:activeId}));
   store.set('cpred_log',JSON.stringify(combatLog)); store.set('cpred_tokenstyle',JSON.stringify(tokenStyle));
   store.set('cpred_theater',theaterMode?'1':'0');
+  const ms=mapState(); if(ms) store.set('cpred_map',JSON.stringify(ms));
   if(!skipAutoSync) scheduleAutoSync(); }
+/* Map layout that is NOT a combatant: grid size + painted floor. (Cover objects and tokens are combatants and
+   already persist with them.) G is declared far below, so this must tolerate being called before it exists. */
+function mapState(){ try{ return {cols:G.cols,rows:G.rows,floorDeco:G.floorDeco}; }catch(e){ return null; } }
+function applyMapState(m){ if(!m||typeof m!=='object') return;
+  const n=v=>Math.max(5,Math.min(60,parseInt(v)||0));
+  if(parseInt(m.cols)>0) G.cols=n(m.cols); if(parseInt(m.rows)>0) G.rows=n(m.rows);
+  if(Array.isArray(m.floorDeco)) G.floorDeco=m.floorDeco.filter(d=>d&&typeof d.type==='string'&&
+    [d.x,d.y,d.w,d.h].every(Number.isFinite)); }
 
 /* ============ SECURE RNG ============ */
 function randInt(max){ const maxUnbiased=Math.floor(4294967296/max)*max; const buf=new Uint32Array(1); let x;
@@ -1792,7 +1811,7 @@ document.addEventListener('click',closeToolMenu);
 document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeToolMenu(); });
 
 function toggleSort(){ sortMode=sortMode==='added'?'init':'added';
-  document.getElementById('sortLabel').textContent='SORT: '+(sortMode==='init'?'INIT':'ADDED'); save(); renderCombat(); }
+  const sl=document.getElementById('sortLabel'); if(sl) sl.textContent=(sortMode==='init'?'INIT':'ADDED'); save(); renderCombat(); }
 function setSetupOpen(id,on){ if(on) setupOpenIds.add(id); else setupOpenIds.delete(id); }
 function toggleExpand(id){ if(expandedIds.has(id))expandedIds.delete(id); else expandedIds.add(id); renderCombat(); }
 function addCombatant(){ const name=document.getElementById('nName').value.trim()||'Unnamed';
@@ -1819,7 +1838,10 @@ function tapInit(id,el){
   inp.type='number'; inp.inputMode='numeric'; inp.value=c.init;
   inp.style.cssText='width:36px;text-align:center;font-family:var(--mono);font-weight:800;font-size:12px;border:none;background:transparent;color:var(--cyan);padding:0;';
   el.textContent=''; el.appendChild(inp); inp.focus(); inp.select();
-  const commit=()=>{ setInit(id,inp.value); };
+  /* Enter commits -> setInit re-renders -> the focused input is removed -> the browser fires blur -> commit
+     again, nested inside the innerHTML swap (throws NotFoundError). Commit exactly once. */
+  let done=false;
+  const commit=()=>{ if(done) return; done=true; setInit(id,inp.value); };
   inp.addEventListener('blur',commit);
   inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();commit();} });
 }
@@ -2965,10 +2987,15 @@ function rollApplyDamage(){ const w=currentWeapon(); const t=find(shoot.targetId
     logEvent('⊘ '+t.name+' drops a held item (aimed shot)',''); }
   else if(shoot.aimType==='leg' && dmgThrough>0 && !t.isCover){
     aimedLine='<div class="crit-hit" style="color:var(--amber);border-color:rgba(255,176,32,.45);">⊘ AIMED: LEG — damage got through armor, target\'s MOVE is halved until healed.</div>';
+    /* record it as a condition (removable on the card) so the map's movement budget actually halves */
+    if(!Array.isArray(t.conditions)) t.conditions=[];
+    if(!t.conditions.some(x=>x&&x.name===LEG_HIT_COND)) t.conditions.push({name:LEG_HIT_COND,rounds:null});
     logEvent('⊘ '+t.name+' MOVE halved (aimed leg shot)',''); }
   let critLine='';
   if(isCrit && t.isCover){ critLine='<div class="crit-hit" style="color:#8a8a96;border-color:#44444c;">'+(auto?'Double 6':'Two 6s')+' rolled — objects take no Critical Injuries.</div>'; }
-  else if(isCrit){ t.hp=Math.max(0,t.hp-5);
+  else if(isCrit){ const hpBeforeCrit=t.hp; t.hp=Math.max(0,t.hp-5);
+    /* the +5 bonus is applied outside resolveDamage, so it must raise the mortal-wound flag itself */
+    if(t.trackDeath && hpBeforeCrit>0 && t.hp<=0){ t.lastHit=(t.lastHit||'')+' · ☠ MORTALLY WOUNDED'; logEvent('☠ '+t.name+' is MORTALLY WOUNDED (critical bonus damage)','death'); }
     const injs=am.expansive?rollCritInjuryExpansive(t,shoot.loc):[rollCritInjury(t,shoot.loc)];
     critLine='<div class="crit-hit">☠ CRITICAL INJURY — '+injs.map(esc).join(' + ')+
       (injs.length>1?'<br>expansive round — the second injury deals no bonus damage':'')+
@@ -3352,6 +3379,10 @@ function restoreCardState(st){
 let hpMemo={}, flashIds=new Set();
 function renderCombat(){ const list=document.getElementById('combatList'); renderTurnBar();
   const keep=captureCardState();
+  /* Removing a focused field makes the browser fire its blur/change handlers *during* the innerHTML swap below.
+     tapInit's blur handler commits and calls renderCombat() — a second swap nested inside the first — which
+     throws NotFoundError. So blur it here, before anything is replaced; keep.focus still restores focus after. */
+  const fa=document.activeElement; if(fa&&fa!==document.body&&list&&list.contains(fa)){ try{ fa.blur(); }catch(e){} }
   /* one-shot damage flash: compare against last render's HP for every combatant (even filtered-out ones) */
   flashIds=new Set(combatants.filter(c=>hpMemo[c.id]!=null && c.hp<hpMemo[c.id]).map(c=>c.id));
   hpMemo={}; combatants.forEach(c=>hpMemo[c.id]=c.hp);
@@ -3606,7 +3637,9 @@ let calcExpr='';
 function calcRefresh(){ document.getElementById('calcExpr').textContent=calcExpr.replace(/\*/g,'×').replace(/\//g,'÷')||'\u00A0';
   let out='0'; try{ if(calcExpr){ const v=safeEval(calcExpr); if(v!==null&&isFinite(v)) out=String(+parseFloat(v.toFixed(8))); } }catch(e){}
   document.getElementById('calcOut').textContent=out; }
-function safeEval(expr){ if(!/^[0-9+\-*/.%() ]+$/.test(expr))return null; return Function('"use strict";return ('+expr.replace(/%/g,'/100')+')')(); }
+function safeEval(expr){ if(!/^[0-9+\-*/.%() ]+$/.test(expr))return null;
+  /* strict mode rejects "08"/"007" and a half-typed "5+" throws — neither may escape as an uncaught error */
+  try{ return Function('"use strict";return ('+expr.replace(/%/g,'/100').replace(/(^|[^0-9.])0+(?=[0-9])/g,'$1')+')')(); }catch(e){ return null; } }
 function calcNum(n){ if(/[0-9.]/.test(n)){ const last=calcExpr.split(/[+\-*/]/).pop(); if(n==='.'&&last.includes('.'))return; } calcExpr+=n; calcRefresh(); }
 function calcOp(op){ if(!calcExpr&&op!=='-')return; if(/[+\-*/]$/.test(calcExpr))calcExpr=calcExpr.slice(0,-1); calcExpr+=op; calcRefresh(); }
 function calcClear(){ calcExpr=''; calcRefresh(); }
@@ -6077,7 +6110,8 @@ function buildBackupData(){
     gigs:gigs,
     tokenStyle:tokenStyle,
     sortMode:sortMode,
-    theaterMode:theaterMode
+    theaterMode:theaterMode,
+    map:mapState()
   };
 }
 function applyBackupData(data){
@@ -6112,6 +6146,7 @@ function applyBackupData(data){
   if(data.tokenStyle&&typeof data.tokenStyle==='object') Object.assign(tokenStyle,data.tokenStyle);
   if(data.sortMode==='added'||data.sortMode==='init') sortMode=data.sortMode;
   if(typeof data.theaterMode==='boolean') theaterMode=data.theaterMode;
+  if(data.map) applyMapState(data.map);
   /* the data is fully restored and saved to disk above — everything past this
      point is just refreshing what's on screen, so a render hiccup (an
      unexpected shape somewhere we didn't anticipate) must never make the
@@ -7819,8 +7854,9 @@ function csUpdateBases(){
       const lvl=parseInt(lvlEl.value)||0;
       const mi=miscEl?parseInt(miscEl.value)||0:0;
       const orig=btn.getAttribute('onclick')||'';
-      const m=orig.match(/csRollSkill\('([^']*)',\s*'([^']*)'/);
-      if(m) btn.setAttribute('onclick',"csRollSkill('"+m[1]+"','"+m[2]+"',"+lvl+","+mi+")");
+      /* first arg is a JSON string literal (see csRenderSkillRow); getAttribute has already decoded the HTML entities */
+      const m=orig.match(/csRollSkill\(("(?:[^"\\]|\\.)*"),\s*'([^']*)'/);
+      if(m) btn.setAttribute('onclick',"csRollSkill("+m[1]+",'"+m[2]+"',"+lvl+","+mi+")");
     }
   });
 }
@@ -7852,7 +7888,7 @@ function csRenderSkillRow(s,sk,stats,miscData){
         '<input type="number" inputmode="numeric" class="sk-misc" value="'+(mi||'')+'" placeholder="±" title="Misc bonus" '+
         'data-skmiscid="'+s.id+'_'+i+'" onchange="csSubMisc(\''+s.id+'\','+i+',this.value)">'+
         '<span class="sk-base" data-skbase="1" data-skstat="'+s.stat+'">'+base+'</span>'+
-        '<button class="sk-roll" onclick="csRollSkill(\''+esc(s.name+(e.name?' — '+e.name:''))+'\',\''+s.stat+'\','+lvl+','+mi+')" title="Roll">⚅</button>'+
+        '<button class="sk-roll" onclick="csRollSkill('+esc(JSON.stringify(s.name+(e.name?' — '+e.name:'')))+',\''+s.stat+'\','+lvl+','+mi+')" title="Roll">⚅</button>'+
         '<button class="mini-btn" onclick="csSubDel(\''+s.id+'\','+i+')">✕</button></div>';
     }).join('');
     return '<div class="sk-row"><span class="sk-name">'+esc(s.name)+
@@ -7872,7 +7908,7 @@ function csRenderSkillRow(s,sk,stats,miscData){
     '<input type="number" inputmode="numeric" class="sk-misc" value="'+(mi||'')+'" placeholder="±" title="Misc bonus" '+
     'data-skmiscid="'+s.id+'" onchange="csSetSkillMisc(\''+s.id+'\',this.value)">'+
     '<span class="sk-base" data-skbase="1" data-skstat="'+s.stat+'">'+base+'</span>'+
-    '<button class="sk-roll" onclick="csRollSkill(\''+esc(s.name)+'\',\''+s.stat+'\','+(lvl||0)+','+(mi||0)+')" title="Roll">⚅</button></div>';
+    '<button class="sk-roll" onclick="csRollSkill('+esc(JSON.stringify(s.name))+',\''+s.stat+'\','+(lvl||0)+','+(mi||0)+')" title="Roll">⚅</button></div>';
 }
 
 /* temp skill state during editing */
@@ -7909,7 +7945,7 @@ function csRefreshSkillSubs(id){
       '<input type="number" inputmode="numeric" class="sk-misc" value="'+(mi||'')+'" placeholder="±" title="Misc bonus" '+
       'data-skmiscid="'+s.id+'_'+i+'" onchange="csSubMisc(\''+s.id+'\','+i+',this.value)">'+
       '<span class="sk-base" data-skbase="1" data-skstat="'+s.stat+'">'+base+'</span>'+
-      '<button class="sk-roll" onclick="csRollSkill(\''+esc(s.name+(e.name?' — '+e.name:''))+'\',\''+s.stat+'\','+lvl+','+mi+')" title="Roll">⚅</button>'+
+      '<button class="sk-roll" onclick="csRollSkill('+esc(JSON.stringify(s.name+(e.name?' — '+e.name:'')))+',\''+s.stat+'\','+lvl+','+mi+')" title="Roll">⚅</button>'+
       '<button class="mini-btn" onclick="csSubDel(\''+s.id+'\','+i+')">✕</button></div>';
   }).join('');
 }
@@ -8174,9 +8210,10 @@ function applyRosterImport(txt,msgEl){
   /* merge: skip dupes by name */
   const existing=new Set(roster.map(r=>r.name.toLowerCase()));
   let added=0;
-  arr.forEach(c=>{ if(!c.name) return;
+  arr.forEach(c=>{ if(!c||typeof c!=='object'||!c.name) return;   /* junk entries (null, numbers, strings) are skipped, not fatal */
+    c.name=String(c.name);
     if(existing.has(c.name.toLowerCase())) return;
-    if(!c.id) c.id=uid(); if(!c.stats) c.stats={int:0,ref:0,dex:0,tech:0,cool:0,will:0,luck:0,move:0,body:0,emp:0};
+    if(!c.id) c.id=uid(); if(!c.stats||typeof c.stats!=='object') c.stats={int:0,ref:0,dex:0,tech:0,cool:0,will:0,luck:0,move:0,body:0,emp:0};
     if(!Array.isArray(c.weapons)) c.weapons=[];
     roster.push(c); existing.add(c.name.toLowerCase()); added++;
   });
@@ -8190,7 +8227,7 @@ function loadRosterFromFile(ev){ const f=ev.target.files&&ev.target.files[0]; if
 /* ---- also include roster in the encounter save/load ---- */
 const _origOpenSaveLoad=openSaveLoad;
 openSaveLoad=function(){
-  document.getElementById('saveText').value=JSON.stringify({app:'cpred',v:6,combatants,notes:notesData,round:roundNo,activeId:activeId,log:combatLog,roster:roster,vehicles:vehicles,architectures:architectures,gigs:gigs},null,1);
+  document.getElementById('saveText').value=JSON.stringify({app:'cpred',v:6,combatants,notes:notesData,round:roundNo,activeId:activeId,log:combatLog,roster:roster,vehicles:vehicles,architectures:architectures,gigs:gigs,map:mapState()},null,1);
   document.getElementById('loadText').value=''; document.getElementById('saveMsg').textContent=''; document.getElementById('loadMsg').textContent='';
   document.getElementById('saveModal').classList.add('open');
 };
@@ -8214,32 +8251,37 @@ applyLoad=function(txt,msgEl){
   /* if the file also carried a roster, merge it in */
   if(data&&Array.isArray(data.roster)&&data.roster.length){
     const existing=new Set(roster.map(r=>r.name.toLowerCase()));
-    data.roster.forEach(c=>{ if(!c.name||existing.has(c.name.toLowerCase()))return;
+    data.roster.forEach(c=>{ if(!c||typeof c!=='object'||!c.name)return; c.name=String(c.name); if(existing.has(c.name.toLowerCase()))return;
+      /* same backfill as applyBackupData: render code assumes these exist */
+      if(!Array.isArray(c.weapons))c.weapons=[]; if(!c.stats||typeof c.stats!=='object')c.stats={};
       if(!c.id)c.id=uid(); roster.push(c); existing.add(c.name.toLowerCase()); });
     saveRoster(); renderRoster();
   }
   /* if the file also carried vehicles, merge them in */
   if(data&&Array.isArray(data.vehicles)&&data.vehicles.length){
     const existing=new Set(vehicles.map(v=>(v.name||'').toLowerCase()));
-    data.vehicles.forEach(v=>{ if(!v.name||existing.has(v.name.toLowerCase()))return;
+    data.vehicles.forEach(v=>{ if(!v||typeof v!=='object'||!v.name)return; v.name=String(v.name); if(existing.has(v.name.toLowerCase()))return;
+      if(!Array.isArray(v.upgrades))v.upgrades=[]; if(!Array.isArray(v.mountedWeapons))v.mountedWeapons=[];
       if(!v.id)v.id=uid(); vehicles.push(v); existing.add(v.name.toLowerCase()); });
     saveVehicles(); renderVehicleList();
   }
   /* if the file also carried architectures, merge them in */
   if(data&&Array.isArray(data.architectures)&&data.architectures.length){
     const existing=new Set(architectures.map(a=>(a.name||'').toLowerCase()));
-    data.architectures.forEach(a=>{ if(!a.name||existing.has(a.name.toLowerCase()))return;
+    data.architectures.forEach(a=>{ if(!a||typeof a!=='object'||!a.name)return; a.name=String(a.name); if(existing.has(a.name.toLowerCase()))return;
+      if(!Array.isArray(a.floors))a.floors=[];
       if(!a.id)a.id=uid(); architectures.push(a); existing.add(a.name.toLowerCase()); });
     saveArchitectures(); renderArchitectureList();
   }
   /* if the file also carried gigs, merge them in */
   if(data&&Array.isArray(data.gigs)&&data.gigs.length){
     const existing=new Set(gigs.map(g=>(g.name||'').toLowerCase()));
-    data.gigs.forEach(g=>{ if(!g.name||existing.has(g.name.toLowerCase()))return;
+    data.gigs.forEach(g=>{ if(!g||typeof g!=='object'||!g.name)return; g.name=String(g.name); if(existing.has(g.name.toLowerCase()))return;
       if(!g.id)g.id=uid(); if(!Array.isArray(g.participants))g.participants=[]; if(g.status!=='done')g.status='active';
       gigs.push(g); existing.add(g.name.toLowerCase()); });
     saveGigs(); renderGigsList();
   }
+  if(data&&data.map) applyMapState(data.map);
   expandedIds=new Set(); save(); renderCombat(); closeSaveLoad();
 };
 function applyVehicleImport(data,msgEl){
@@ -8547,6 +8589,7 @@ const G={cols:20,rows:20,cell:40,ox:0,oy:0,zoom:1,sel:null,
   floorDeco:[],floorPaint:null,
   showReach:true,showLOS:true,hoverId:null,hoverCell:null,
   aim:null};
+try{ applyMapState(JSON.parse(store.get('cpred_map')||'null')); }catch(e){}   /* restore grid size + painted floor */
 let gridPlaceMode=null;
 
 /* ---- TOKEN IMAGE CACHE ---- */
@@ -8665,6 +8708,7 @@ function gridResize(){
     const p=v.split(/[×xX,]/);
     G.cols=Math.max(5,Math.min(60,parseInt(p[0])||20));
     G.rows=Math.max(5,Math.min(60,parseInt(p[1])||G.cols));
+    save();
     document.getElementById('tempModal').classList.remove('open');
     gridResetView();
   };
@@ -8825,9 +8869,10 @@ function gridMoveStat(c){
   if(!mv&&typeof c.move==='number') mv=c.move|0;
   /* a Seriously Wounded character or an aimed-leg victim moves at half */
   let m=mv||6;
-  if(/leg|move.*halv/i.test((c.injuries||[]).join(' '))) m=Math.ceil(m/2);
+  if(/leg|move.*halv/i.test((c.injuries||[]).join(' '))||(c.conditions||[]).some(x=>x&&x.name===LEG_HIT_COND)) m=Math.ceil(m/2);
   return Math.max(1,m);
 }
+const LEG_HIT_COND='Leg hit — MOVE ½';   /* set by an aimed leg shot (rollApplyDamage), read by gridMoveStat */
 /* BFS over free cells → Map("x,y" -> steps). 8-neighbour, no cutting between two solids. */
 let _reachCache={key:'',val:null};
 function gridReach(c,squares){
@@ -10661,7 +10706,7 @@ function gridPUp(e){
     const x2=Math.max(G.coverStart.x,G.coverEnd.x), y2=Math.max(G.coverStart.y,G.coverEnd.y);
     G.floorDeco.push({type:G.floorPaint,x:x1,y:y1,w:x2-x1+1,h:y2-y1+1});
     G.coverStart=null; G.coverEnd=null;
-    gridDraw(); return;
+    save(); gridDraw(); return;
   }
   /* finalize cover rectangle */
   if(G.coverStart&&gridPlaceMode){
@@ -10797,7 +10842,7 @@ function gridFloorPicker(){
   ];
   types.forEach(t=>{
     if(t.id==='clearFloor'){
-      html+='<button class="btn ghost wide" style="color:var(--red);margin-top:8px;" onclick="G.floorDeco=[];document.getElementById(\'tempModal\').classList.remove(\'open\');gridDraw();toast(\'Floors cleared\');">'+t.name+'</button>';
+      html+='<button class="btn ghost wide" style="color:var(--red);margin-top:8px;" onclick="G.floorDeco=[];save();document.getElementById(\'tempModal\').classList.remove(\'open\');gridDraw();toast(\'Floors cleared\');">'+t.name+'</button>';
     } else {
       html+='<button class="btn ghost wide" style="text-align:left;padding:10px;" onclick="gridStartFloor(\''+t.id+'\')">'+
         '<b>'+t.name+'</b><br><span style="color:var(--muted);font-size:11px;">'+t.desc+'</span></button>';
