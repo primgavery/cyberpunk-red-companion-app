@@ -67,6 +67,7 @@ Search for these `/* ===== … ===== */` banners:
 | `NET ARCHITECTURE SYSTEM` | runnable netrunning scenes (floors, ICE, demons, programs) |
 | `ARCHIVE` | IP / eurodollar ledger |
 | `WRITE-BACK` | `writeBack` — copy combat HP/SP/ammo/injuries back to the roster character |
+| `ENCOUNTERS & REWARDS` | `importEncounter` (file → combatants), `EXAMPLE_ENCOUNTERS`, `REWARD_TABLE`, kill tracking (`rwSnapshotKills`, `rwKillCounts`), `openRewards` / `rwApply`, `awardToRoster` |
 | `VTT BATTLE MAP` | `G`, `gridDraw`, pointer events, LOS/reach/movement, 47-item object library, 43 canvas-drawn sprite functions, 15 scene presets |
 
 ## The attack pipeline (the most important code path)
