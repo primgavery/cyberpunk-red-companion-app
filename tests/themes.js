@@ -20,6 +20,12 @@ const SCREENS = {
   rewards: () => { combatants.filter(c => c.side === 'enemy' && !c.isCover).slice(0, 2).forEach(c => c.hp = 0); openRewards(); },
   theme_picker: () => openThemePicker(),
   shoot: () => { setMapMode('list'); const s = combatants.find(c => c.side === 'ally'); openShoot(s.id); selectTarget(combatants.find(c => c.side === 'enemy' && !c.isCover && c.hp > 0).id); document.getElementById('shootRange').value = 8; onRangeInput(); },
+  advice_list: () => { setMapMode('list'); const n = combatants.find(c => c.side === 'enemy' && !c.isCover); activeId = n.id; advInvalidate(); renderCombat(); },
+  advice_map: () => { setMapMode('map'); const n = combatants.find(c => c.side === 'enemy' && !c.isCover); activeId = n.id; advInvalidate(); gridAutoPlace(); gridDraw(); },
+  advice_why: () => { const n = combatants.find(c => c.side === 'enemy' && !c.isCover); activeId = n.id; advInvalidate(); openAdvice(n.id); },
+  docs_brief: () => { showView('docs', document.querySelectorAll('nav button')[3]); scrollTo(0, 0); },
+  docs_log: () => { showView('docs', document.querySelectorAll('nav button')[3]); document.getElementById('clogList').scrollIntoView(); },
+  docs_ref: () => { showView('docs', document.querySelectorAll('nav button')[3]); document.querySelectorAll('#docs details.docs-ref').forEach(d => { d.open = true; }); document.querySelector('#docs details.docs-ref:last-of-type').scrollIntoView(); },
   sheet_roles: () => openCharSheet(roster[0].id),
   sheet_stats: () => { openCharSheet(roster[0].id); csShowPage('stats'); },
   sheet_inventory: () => { openCharSheet(roster[0].id); csShowPage('inventory'); },
@@ -58,11 +64,11 @@ const check = (name, ok, extra) => { if (!ok) failed++; console.log((ok ? 'ok   
 
   /* ---- 2. theme is applied before first paint (no flash of the wrong theme) ---- */
   {
-    const { chromium } = require('playwright'); const { APP } = require('./lib');
+    const { chromium } = require('playwright'); const { appUrl } = require('./lib');
     const browser = await chromium.launch(); const ctx = await browser.newContext();
     await ctx.addInitScript(() => { try { localStorage.setItem('cpred_theme', 'paper'); } catch (e) {}
       document.addEventListener('readystatechange', () => { if (!window.__seen && document.documentElement.dataset.theme) window.__seen = document.documentElement.dataset.theme + '@' + document.readyState; }); });
-    const page = await ctx.newPage(); await page.goto(APP);
+    const page = await ctx.newPage(); await page.goto(await appUrl());
     const seen = await page.evaluate(() => window.__seen);
     check('the theme attribute is already set while the page is still loading', /^paper@(loading|interactive)$/.test(seen || ''), String(seen));
     await browser.close();
@@ -72,7 +78,7 @@ const check = (name, ok, extra) => { if (!ok) failed++; console.log((ok ? 'ok   
   for (const t of THEMES) {
     const { browser, page, errors } = await launch({ theme: t, viewport: { width: 390, height: 844 } });
     await page.evaluate(tcText => { applyRosterImport(tcText, {}); importEncounter(JSON.parse(JSON.stringify(EXAMPLE_ENCOUNTERS[3].data)), { replace: true }); addRosterToCombat(roster[0].id, 'ally');
-      const e = combatants.filter(c => c.side === 'enemy' && !c.isCover); e[0].hp = 12; e[1].hp = 0; save(); }, tc);
+      const e = combatants.filter(c => c.side === 'enemy' && !c.isCover); e[0].hp = 12; e[1].hp = 0; save(); sessionLog = []; logAdd('Session 1 — the heist'); logAdd('Met Rache at the Afterlife. She owes us a favour.'); logAdd('Maelstrom Ambush — 3 rounds. Defeated: Booster ×3. Party: Test Runner 12/30 HP.', 'encounter'); }, tc);
     let total = 0; const bad = [];
     const floor = t === 'neon' ? 3 : 4.5;
     for (const [name, fn] of Object.entries(SCREENS)) {

@@ -50,10 +50,10 @@ Everything except `template` (or `tier`) is optional; unspecified stats come fro
         "focus": "nearest", "preferRange": [6, 25], "notes": "Barks orders from behind the dumpsters." }
 ```
 
-Today this is a **brief for whoever runs the enemy** — it is rendered as a 🧠 line at the top of the combatant's note
-and kept on the combatant as `ai`. The fields match the plan in [ENEMY-AI-NOTES.md](ENEMY-AI-NOTES.md), so when
-enemies start acting on their own, existing encounter files will already carry the instructions. `profile` and `notes` are
-free text; unknown keys are ignored.
+This is both a **brief for whoever runs the enemy** (shown as a 🧠 line at the top of the combatant's note, and kept on the combatant
+as `ai`) **and the input to the turn advisor**, which reads it when it suggests that NPC's move and attack — see
+[TURN-ADVISOR.md](TURN-ADVISOR.md) for exactly what each key does. `profile` is one of: aggressive, cautious, sniper, flanker, duelist,
+coward, berserker (anything else is treated as a plain brief); `notes` is free text for the GM; unknown keys are ignored.
 
 ### Scenes (the `scene` field)
 
@@ -104,6 +104,8 @@ Defeated enemies and bonuses are marked as paid, so reopening the screen shows n
 kills twice. (The ledger entry itself is the record: delete it on the sheet if you want to take a payout back.)
 
 ## Asking Claude to write one
+
+> **Easiest:** open the **DOCS** tab and tap **Copy brief** ([CLAUDE-BRIEF.md](CLAUDE-BRIEF.md)). It is generated from the live catalogs, so every name in it is valid, and it can include your party and the story so far. The prompt below is the manual fallback.
 
 Paste this into the chat once, then ask for encounters ("a 4-person Valentinos stakeout at a rooftop bar, medium difficulty"):
 

@@ -80,7 +80,7 @@ press. Don't use red for a primary button or the accent for an enemy.
 
 | Tool | What it does |
 |---|---|
-| `node tests/themes.js` | Applies every theme, checks persistence/fallback/no-flash, and runs a **WCAG contrast audit** over 15 screens (≈380 text elements per theme): modern themes must be ≥ 4.5:1 everywhere, Neon ≥ 3:1. |
+| `node tests/themes.js` | Applies every theme, checks persistence/fallback/no-flash, and runs a **WCAG contrast audit** over 21 screens (≈880 text elements per theme, including the DOCS tab, the campaign log and the advisor): modern themes must be ≥ 4.5:1 everywhere, Neon ≥ 3:1. |
 | `tests/contrast-lib.js` | The audit itself (runs in the page). It composites translucent layers up the tree to find the real background, then reports ratio, selector and text — reuse it for any new screen. |
 | `node tests/visual-tour.js <label> [theme]` | Phone-size screenshots of 7 screens into `tests/.shots/` (git-ignored). Deterministic. |
 | `python3 tests/imgdiff.py <a> <b>` | % of differing pixels per screen between two tours. Use it to **prove a refactor changed nothing**: tour the old build (`APP=file:///tmp/old.html node tests/visual-tour.js before`), tour the new one, diff. That is how the Neon theme was kept identical while ~70 hard-coded colours were turned into variables. |

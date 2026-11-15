@@ -932,6 +932,40 @@
   html[data-ui="modern"] #gridInitStrip .gi-chip.gi-ally .gi-dot{background-color:var(--ally-fill);color:var(--on-ally);}
   html[data-ui="modern"] #gridInitStrip .gi-chip.gi-enemy .gi-dot{background-color:var(--enemy-fill);color:var(--on-enemy);}
 
+  /* turn advisor strip */
+  .advice{display:flex;align-items:center;gap:8px;margin-top:6px;padding:7px 8px 7px 10px;border-radius:10px;background:var(--panel-2);
+    border:1px solid var(--line);border-left:3px solid var(--accent);font-size:12px;line-height:1.35;}
+  .advice.done{border-left-color:var(--muted);color:var(--muted);}
+  .advice .adv-main{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .advice .adv-tag{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-right:4px;}
+  .advice .adv-actions{display:flex;gap:6px;flex:0 0 auto;}
+  .advice button{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;font-size:11px;font-weight:700;padding:7px 9px;cursor:pointer;font-family:var(--sans);}
+  .advice button.adv-go{background:var(--accent);color:var(--on-accent);border-color:transparent;}
+  #gridAdvice{padding:0 8px 4px;}
+
+  /* docs tab */
+  .docs-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;}
+  .docs-h{font-weight:700;font-size:15px;margin-bottom:6px;}
+  .docs-opt{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:13px;color:var(--dim);}
+  .docs-opt input{width:20px;height:20px;flex:0 0 auto;margin:0;}
+  .docs-actions{display:flex;gap:8px;margin-top:10px;}
+  .docs-ref{border-top:1px solid var(--line);margin-top:10px;} .docs-ref>summary{cursor:pointer;padding:10px 0;font-size:13px;font-weight:600;list-style:none;color:var(--text);}
+  .docs-ref>summary::-webkit-details-marker{display:none;} .docs-ref>summary::before{content:'▸';display:inline-block;width:16px;color:var(--muted);transition:transform .15s;}
+  .docs-ref[open]>summary::before{transform:rotate(90deg);}
+  .ref-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -2px 8px;} .ref-table{border-collapse:collapse;font-size:11px;min-width:100%;}
+  .ref-table th{text-align:left;color:var(--muted);font-weight:600;padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap;}
+  .ref-table td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top;} .ref-table td:first-child{font-weight:600;white-space:nowrap;}
+  .log-add{display:flex;gap:8px;} .log-add input{flex:1;min-width:0;}
+  .log-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;} .log-chips button{background:var(--panel-2);border:1px solid var(--line);color:var(--dim);border-radius:999px;font-size:12px;padding:6px 11px;cursor:pointer;font-family:var(--sans);}
+  .log-chips .chip-hi{border-color:var(--accent);color:var(--accent);font-weight:600;}
+  .log-entry{border-top:1px solid var(--line);padding:9px 0;} .log-entry:first-child{border-top:none;}
+  .log-meta{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--muted);margin-bottom:3px;}
+  .log-kind{background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+  .log-entry.k-session .log-text{font-weight:600;} .log-entry.k-encounter{border-left:3px solid var(--red);padding-left:9px;}
+  .log-acts{margin-left:auto;display:flex;gap:2px;} .log-acts button{background:none;border:none;color:var(--muted);font-size:14px;padding:4px 8px;cursor:pointer;}
+  .log-text{font-size:13px;line-height:1.45;white-space:pre-wrap;word-break:break-word;}
+  .log-entry textarea{width:100%;min-height:90px;} .log-btns{display:flex;gap:8px;margin-top:6px;}
+
   /* theme picker */
   .theme-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   .theme-card{background:var(--panel-2);border:2px solid var(--line);border-radius:14px;padding:10px;cursor:pointer;text-align:left;color:var(--text);font-family:var(--sans);}
@@ -1065,6 +1099,7 @@
     <button class="btn wide" onclick="addNote()" style="margin-bottom:14px;">+ NEW NOTE</button>
     <div id="notesList"></div>
   </section>
+  <section id="docs" class="view"></section>
 </main>
 
 <div id="toast" class="toast"><span id="toastMsg"></span><button onclick="doUndo()">UNDO</button></div>
@@ -1073,6 +1108,7 @@
   <button class="active" onclick="showMapTab(this)"><span class="ic ic-emoji">🗺</span><span class="ic-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg></span>MAP</button>
   <button onclick="showView('dice',this)"><span class="ic ic-emoji">⚄</span><span class="ic-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="8.6" cy="8.6" r=".9" fill="currentColor"/><circle cx="15.4" cy="8.6" r=".9" fill="currentColor"/><circle cx="12" cy="12" r=".9" fill="currentColor"/><circle cx="8.6" cy="15.4" r=".9" fill="currentColor"/><circle cx="15.4" cy="15.4" r=".9" fill="currentColor"/></svg></span>DICE</button>
   <button onclick="showView('roster',this)"><span class="ic ic-emoji">◉</span><span class="ic-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.7 3.1-6.2 7-6.2s7 2.5 7 6.2"/></svg></span>CHARS</button>
+  <button onclick="showView('docs',this)"><span class="ic ic-emoji">📖</span><span class="ic-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6c-1.8-1.2-4-1.8-7-1.8v13c3 0 5.2.6 7 1.8 1.8-1.2 4-1.8 7-1.8v-13c-3 0-5.2.6-7 1.8z"/><path d="M12 6v13"/></svg></span>DOCS</button>
 </nav>
 </div><!-- /#device -->
 
@@ -1258,6 +1294,7 @@
     <div id="gridInitStrip"></div>
     <canvas id="gridCanvas"></canvas>
     <div class="grid-ftr">
+      <div id="gridAdvice" style="display:none;"></div>
       <div id="gridHUD" style="display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap;">
         <span id="gridTurnLabel" style="flex:1;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
         <button class="grid-btn" id="gridNextBtn" style="width:auto;padding:0 10px;font-size:12px;" onclick="gridNextTurn()">NEXT ▶</button>
@@ -1359,6 +1396,7 @@ function rollAttackRoll(mod){ let first=randInt(10),chain=[first],extra=0,crit=n
 function showView(id,btn){ document.getElementById('gridOverlay').classList.remove('open');
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  if(id==='docs') renderDocs();
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active')); if(btn) btn.classList.add('active');
   (document.body.classList.contains('sim')?document.querySelector('#device main'):window).scrollTo(0,0);
   closeToolMenu(); syncStickyOffsets(); }
@@ -1405,7 +1443,8 @@ function openTools(){
       toolsRow('openRewards','💰','Encounter rewards (EB / IP)')
     )+
     toolsGroup('COMBAT MODE',
-      toolsRow('toggleTheaterMode','🎭','Theater of the Mind: <span id="theaterLabel">'+(theaterMode?'ON':'OFF')+'</span>')
+      toolsRow('toggleTheaterMode','🎭','Theater of the Mind: <span id="theaterLabel">'+(theaterMode?'ON':'OFF')+'</span>')+
+      toolsRow('toggleAdvisor','💡','Turn suggestions for NPCs: <span id="advisorLabel">'+(advisorOn?'ON':'OFF')+'</span>')
     )+
     toolsGroup('REFERENCE',
       toolsRow('openRange','↔','Range DV reference')+
@@ -2201,8 +2240,8 @@ function renderTurnBar(){ const el=document.getElementById('turnBar');
     '<span class="tb-round">ROUND '+roundNo+'</span>'+
     '<span class="tb-now '+cur.side+'">'+esc(cur.name)+'</span>'+
     '<button onclick="resetTurns()" title="Restart at round 1" aria-label="Restart at round 1">⟲</button>'+
-    '<button class="go" onclick="nextTurn()">END TURN ▶</button></div>';
-  syncStickyOffsets(); }
+    '<button class="go" onclick="nextTurn()">END TURN ▶</button></div><div id="turnAdvice"></div>';
+  advRefreshStrips(); syncStickyOffsets(); }
 
 /* ---- DEATH SAVES (opt-in per combatant) ---- */
 function douse(id){ const c=find(id); if(!c)return; c.onFire=false; c.lastHit='fire put out'; save(); renderCombat(); }
@@ -6230,7 +6269,8 @@ function buildBackupData(){
     sortMode:sortMode,
     theaterMode:theaterMode,
     map:mapState(),
-    encounter:activeEncounter
+    encounter:activeEncounter,
+    sessionLog:sessionLog
   };
 }
 function applyBackupData(data){
@@ -6267,6 +6307,7 @@ function applyBackupData(data){
   if(typeof data.theaterMode==='boolean') theaterMode=data.theaterMode;
   if(data.map) applyMapState(data.map);
   if(data.encounter!==undefined){ activeEncounter=(data.encounter&&typeof data.encounter==='object')?data.encounter:null; store.set(ENC_KEY,JSON.stringify(activeEncounter)); }
+  if(Array.isArray(data.sessionLog)){ sessionLog=data.sessionLog.filter(e=>e&&typeof e.text==='string').map(e=>({id:String(e.id||uid()),at:String(e.at||''),kind:['note','session','encounter'].includes(e.kind)?e.kind:'note',text:e.text.slice(0,600)})); store.set('cpred_sessionlog',JSON.stringify(sessionLog)); }
   /* the data is fully restored and saved to disk above — everything past this
      point is just refreshing what's on screen, so a render hiccup (an
      unexpected shape somewhere we didn't anticipate) must never make the
@@ -8347,7 +8388,7 @@ function loadRosterFromFile(ev){ const f=ev.target.files&&ev.target.files[0]; if
 /* ---- also include roster in the encounter save/load ---- */
 const _origOpenSaveLoad=openSaveLoad;
 openSaveLoad=function(){
-  document.getElementById('saveText').value=JSON.stringify({app:'cpred',v:6,combatants,notes:notesData,round:roundNo,activeId:activeId,log:combatLog,roster:roster,vehicles:vehicles,architectures:architectures,gigs:gigs,map:mapState(),encounter:activeEncounter},null,1);
+  document.getElementById('saveText').value=JSON.stringify({app:'cpred',v:6,combatants,notes:notesData,round:roundNo,activeId:activeId,log:combatLog,roster:roster,vehicles:vehicles,architectures:architectures,gigs:gigs,map:mapState(),encounter:activeEncounter,sessionLog:sessionLog},null,1);
   document.getElementById('loadText').value=''; document.getElementById('saveMsg').textContent=''; document.getElementById('loadMsg').textContent='';
   document.getElementById('saveModal').classList.add('open');
 };
@@ -8403,6 +8444,9 @@ applyLoad=function(txt,msgEl){
   }
   if(data&&data.map) applyMapState(data.map);
   if(data&&data.encounter&&typeof data.encounter==='object'){ activeEncounter=data.encounter; store.set(ENC_KEY,JSON.stringify(activeEncounter)); }
+  if(data&&Array.isArray(data.sessionLog)){      /* merge by id: loading a save must never discard log entries written since */
+    const have=new Set(sessionLog.map(e=>e.id)); data.sessionLog.forEach(e=>{ if(e&&typeof e.text==='string'&&!have.has(e.id)){ sessionLog.push({id:String(e.id||uid()),at:String(e.at||''),kind:['note','session','encounter'].includes(e.kind)?e.kind:'note',text:e.text.slice(0,600)}); have.add(e.id); } });
+    sessionLog.sort((a,b)=>String(a.at).localeCompare(String(b.at))); saveSessionLog(); }
   expandedIds=new Set(); save(); renderCombat(); closeSaveLoad();
 };
 function applyVehicleImport(data,msgEl){
@@ -8998,8 +9042,11 @@ const LEG_HIT_COND='Leg hit — MOVE ½';   /* set by an aimed leg shot (rollApp
 let _reachCache={key:'',val:null};
 function gridReach(c,squares){
   if(!c||c.gridX==null) return null;
+  /* the key must change whenever anything that blocks movement changes: who is where, and which cover is alive.
+     (It used to hold only the mover's position, the head-count and the cover count — so another token stepping onto
+     a square left a stale map that still listed the square as reachable.) */
   const ck=c.id+'|'+c.gridX+'|'+c.gridY+'|'+squares+'|'+G.cols+'x'+G.rows+'|'+combatants.length+'|'+
-    combatants.reduce((s,x)=>s+(x.isCover&&x.hp>0?1:0),0);
+    combatants.reduce((h,x)=>(Math.imul(h,31)+((x.gridX|0)*7+(x.gridY|0)*3+(x.gridW|0)+(x.gridH|0)*5+(x.hp>0?1:0)+(x.isCover?2:0)))|0,0);
   if(_reachCache.key===ck) return _reachCache.val;
   const W=G.cols,H=G.rows, K=(x,y)=>x+','+y;
   const dist=new Map(); dist.set(K(c.gridX,c.gridY),0);
@@ -10541,6 +10588,13 @@ function gridDraw(){
     }
   }
 
+  /* turn advisor: where the suggested move ends (dashed path + ring) */
+  if(G.advHint){ const h=G.advHint, fx=G.ox+(h.from.x+.5)*c, fy=G.oy+(h.from.y+.5)*c, tx=G.ox+(h.x+.5)*c, ty=G.oy+(h.y+.5)*c;
+    ctx.save(); ctx.strokeStyle=themeVar('--accent'); ctx.lineWidth=2; ctx.setLineDash([6,5]); ctx.globalAlpha=.9;
+    ctx.beginPath(); ctx.moveTo(fx,fy); ctx.lineTo(tx,ty); ctx.stroke();
+    ctx.beginPath(); ctx.arc(tx,ty,c*.42,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(tx,ty,c*.09,0,Math.PI*2); ctx.fillStyle=themeVar('--accent'); ctx.fill(); ctx.restore(); }
+
   /* update combat HUD */
   gridUpdateHUD();
 }
@@ -11779,6 +11833,7 @@ function gridUpdateHUD(){
   const gb=document.getElementById('gridGrenBtn');
   if(gb) gb.style.display=(norm&&sel&&!sel.isCover&&sel.hp>0)?'':'none';
   gridRenderInitStrip();
+  advRefreshStrips();
 }
 /* leave cover-placement / floor-paint mode */
 function gridExitPlace(){
@@ -12186,6 +12241,7 @@ function rwEnc(){ if(!activeEncounter||typeof activeEncounter!=='object') active
   if(typeof e.name!=='string') e.name=''; if(typeof e.summary!=='string') e.summary=''; if(typeof e.scene!=='string') e.scene='';
   if(!e.kills||typeof e.kills!=='object') e.kills={}; if(!e.paid||typeof e.paid!=='object') e.paid={};
   if(!Array.isArray(e.claims)) e.claims=[]; if(e.rewards===undefined) e.rewards=null;
+  if(!e.names||typeof e.names!=='object') e.names={};
   return e; }
 
 /* HOUSE DEFAULTS — not from the rulebook. Edit freely; the rewards screen shows the working and lets you override. */
@@ -12294,6 +12350,7 @@ function openEncounterImport(){
   const ex=EXAMPLE_ENCOUNTERS.map((e,i)=>'<button class="btn ghost" style="text-align:left;margin:0 0 6px;" onclick="encLoadExample('+i+')">'+esc(e.name)+
     '<div class="hint" style="margin:2px 0 0;">'+esc(e.blurb)+'</div></button>').join('');
   showModal('⇩ IMPORT ENCOUNTER',
+    '<div class="hint" style="margin:0 0 10px;">Want Claude to write one? Open the <b>DOCS</b> tab and tap <b>Copy brief</b> — it lists every name this importer accepts.</div>'+
     '<div class="sl">EXAMPLES — tap to fill the box below, then IMPORT</div><div style="display:flex;flex-direction:column;margin:6px 0 12px;">'+ex+'</div>'+
     '<div class="sl">ENCOUNTER JSON</div>'+
     '<textarea id="encText" spellcheck="false" placeholder="Paste an encounter here (see docs/ENCOUNTER-FORMAT.md)" style="width:100%;min-height:150px;font-family:var(--mono);font-size:11px;"></textarea>'+
@@ -12313,7 +12370,7 @@ function encImportClick(){
 
 /* ---- rewards ---- */
 function rwSnapshotKills(){ const enc=rwEnc();
-  combatants.forEach(c=>{ if(c.side==='enemy'&&!c.isCover&&c.hp<=0&&!enc.paid[c.id]) enc.kills[c.id]=tierOf(c); });
+  combatants.forEach(c=>{ if(c.side==='enemy'&&!c.isCover&&c.hp<=0){ enc.names[c.id]=c.name; if(!enc.paid[c.id]) enc.kills[c.id]=tierOf(c); } });
   saveEncounterState(); }
 function rwKillCounts(){ const enc=rwEnc(); const m=Object.assign({},enc.kills);
   combatants.forEach(c=>{ if(c.isCover||c.side!=='enemy') return; if(c.hp<=0) m[c.id]=tierOf(c); else delete m[c.id]; });
@@ -12366,6 +12423,7 @@ function rwApply(){
   const msg=document.getElementById('rwMsg'), t=rwTotals(), enc=rwEnc();
   if(!t.n){ msg.textContent='Pick at least one character to pay.'; return; }
   if(t.eb<=0&&t.ip<=0){ msg.textContent='Nothing to award — set an amount first.'; return; }
+  rwSnapshotKills();   /* keep the names of the fallen before they are marked paid */
   const label=enc.name||'Combat encounter'; const names=[];
   t.ids.forEach((id,i)=>{ const r=rosterFind(id); awardToRoster(r,label,t.ebEach+(i===0?t.remainder:0),t.ip); names.push(r.name||'?'); });
   const k=rwKillCounts(); k.ids.forEach(id=>{ enc.paid[id]=1; delete enc.kills[id]; });
@@ -12374,6 +12432,7 @@ function rwApply(){
   enc.claims.push({at:new Date().toISOString(),summary});
   saveRoster(); renderRoster(); saveEncounterState();
   logEvent('💰 Rewards for "'+label+'": '+summary,''); save();
+  logAdd(logCompose(),'encounter');    /* the campaign log now has a recap — edit or delete it in the DOCS tab */
   document.getElementById('tempModal').classList.remove('open'); toast('Awarded — '+names.length+' character'+(names.length===1?'':'s')+' paid'); }
 
 /* ---- built-in examples (Cyberpunk RED / Night City). Tap one in Import to fill the box. ---- */
@@ -12418,6 +12477,438 @@ const EXAMPLE_ENCOUNTERS=[
    {template:'Heavy Boss',name:'"Wire" (Cyberpsycho)',hp:70,sp:14,cn:15,weapons:['Heavy SMG','Very Heavy Melee'],ai:{profile:'berserker',focus:'biggest threat',notes:'Ignores cover and never retreats. Charges to melee, fires the SMG while closing. Screams at whoever hurt him last.'}}],
   rewards:{eb:500,ip:12,notes:'NCPD bounty.',bonuses:[{label:'Subdued non-lethally (Psycho Squad pays double)',eb:500,ip:3}]}}}
 ];
+
+/* ============ TURN ADVISOR ============
+   Suggests what a *non-roster* combatant (an NPC, either side) should do this turn: where to move and what to shoot.
+   It never acts on its own — the player taps DO IT, which moves the token through the app's normal rules and opens the
+   normal attack screen pre-filled. suggestTurn() is pure (reads state, returns a plan, changes nothing) so it can be tested
+   alone. How it decides is written up in docs/TURN-ADVISOR.md; the short version:
+     target × weapon × cell are scored by expected HP damage (hit chance from the app's own DV tables, damage minus armor),
+     plus position value (cover, line of sight, preferred range, exposure), shaped by the NPC's `ai` brief. */
+let advisorOn=store.get('cpred_advisor')!=='0';
+function toggleAdvisor(){ advisorOn=!advisorOn; store.set('cpred_advisor',advisorOn?'1':'0');
+  const l=document.getElementById('advisorLabel'); if(l) l.textContent=advisorOn?'ON':'OFF';
+  renderTurnBar(); try{ gridUpdateHUD(); }catch(e){} }
+
+/* ---- probability helpers (exact enumeration; small and fast) ---- */
+function advD10Dist(mod){ const m=new Map(), add=(v,p)=>m.set(v,(m.get(v)||0)+p);
+  for(let a=1;a<=10;a++){ if(a===10) for(let b=1;b<=10;b++) add(10+b+mod,.01);       /* natural 10 explodes up */
+    else if(a===1) for(let b=1;b<=10;b++) add(1-b+mod,.01);                          /* natural 1 explodes down */
+    else add(a+mod,.1); }
+  return m; }
+/* P(attack total > beat). Ties go to the defender, exactly as rollAttack() resolves them. `beat` is a number (DV) or a distribution (an Evasion roll). */
+function advHitProb(mod,beat){ const A=advD10Dist(mod); let p=0;
+  if(typeof beat==='number'){ A.forEach((pr,v)=>{ if(v>beat) p+=pr; }); return p; }
+  A.forEach((pa,va)=>beat.forEach((pb,vb)=>{ if(va>vb) p+=pa*pb; })); return p; }
+function advDiceDist(str){ const m=/^(\d+)d(\d+)$/.exec(str||''); if(!m) return new Map([[0,1]]);
+  let d=new Map([[0,1]]); const faces=+m[2];
+  for(let i=0;i<+m[1];i++){ const n=new Map(); d.forEach((p,v)=>{ for(let f=1;f<=faces;f++) n.set(v+f,(n.get(v+f)||0)+p/faces); }); d=n; }
+  return d; }
+/* expected HP lost, and chance that one hit kills, for a damage distribution against armor `sp` and `hp` remaining */
+function advDamage(dist,bonus,mult,sp,hp){ let e=0,pk=0;
+  dist.forEach((p,v)=>{ const past=Math.max(0,(v*mult)+bonus-sp); e+=p*past; if(past>=hp) pk+=p; }); return {e,pk}; }
+
+/* ---- small geometry helpers on top of the map's own functions ---- */
+function advFoes(c){ return combatants.filter(x=>!x.isCover&&x.hp>0&&x.side!==c.side); }
+function advDistM(ax,ay,t){ return Math.round(Math.hypot(ax-(t.gridX+((t.gridW||1)-1)/2),ay-(t.gridY+((t.gridH||1)-1)/2))*2); }   /* same 2 m/cell rule as combatGridDist */
+function advAdjacentTo(x,y,t){ const w=t.gridW||1,h=t.gridH||1; return x>=t.gridX-1&&x<=t.gridX+w&&y>=t.gridY-1&&y<=t.gridY+h&&!(x>=t.gridX&&x<t.gridX+w&&y>=t.gridY&&y<t.gridY+h); }
+/* living cover the map would count as "behind cover" for a token standing on (x,y) — mirrors gridAutoAssignCover's adjacency rule */
+function advCoversAt(x,y){ return combatants.filter(cv=>{ if(!cv.isCover||cv.hp<=0||cv.gridX==null||gridEnterable(cv)) return false;
+  const w=cv.gridW||1,h=cv.gridH||1; const adj=x>=cv.gridX-1&&x<=cv.gridX+w&&y>=cv.gridY-1&&y<=cv.gridY+h; const on=x>=cv.gridX&&x<cv.gridX+w&&y>=cv.gridY&&y<cv.gridY+h; return adj&&!on; }); }
+function advDir(dx,dy){ const v=dy<0?'N':dy>0?'S':'', h=dx>0?'E':dx<0?'W':''; return (v+h)||'here'; }
+
+/* what one attack action with weapon `w` is worth against target `t` at `m` metres (null = unknown range, no map) */
+function advOption(c,w,t,m){
+  const sp=effectiveSP(t.body,w.armorMode||'full',w.ignoreBelow||null);
+  const wound=(c.hp>0&&c.hp<=Math.ceil(c.hpMax/2))?-2:0;
+  let cn=0; if(c.useCN) cn=c.cn||0; else if(c.skills&&c.charStats) cn=skillAtkBonus(c,w,'single');
+  const mod=cn+(w.hitBonus||0)+wound+(w.quality==='excellent'?1:0);
+  const tWound=(t.hp>0&&t.hp<=Math.ceil(t.hpMax/2))?-2:0;
+  const dodge=advD10Dist(dodgeValueOf(t)+tWound);
+  const dmgD=advDiceDist(w.dmg), bonus=w.dmgBonus||0;
+  const shots=Math.max(1,Math.min(w.rof||1,w.mag!=null?(w.ammo||0):99));
+  const make=(mode,hit,e,pk,dv,note)=>({mode,hit,e:+e.toFixed(2),pk:+pk.toFixed(3),dv,note:note||'',score:e+10*pk});
+  if(w.melee){ const hit=advHitProb(mod,dodge); const d=advDamage(dmgD,bonus,1,sp,t.hp);
+    return make('single',hit,hit*d.e*shots,hit*d.pk,null,'opposed by Evasion'); }
+  let dv=null, assumed=false;
+  if(m==null){ dv=13; assumed=true; } else { dv=gridRangeDV(w.rangeRow,m,'single'); if(dv==null) return null; }
+  const hit=advHitProb(mod,dv), d=advDamage(dmgD,bonus,1,sp,t.hp);
+  let best=make('single',hit,hit*d.e*shots,hit*d.pk,dv,assumed?'range unknown, DV 13 assumed':'');
+  if(w.autoMult&&(w.ammo||0)>=10){            /* autofire: 2d6 × (margin, capped), once per Action, costs 10 rounds */
+    const dvA=assumed?13:gridRangeDV(w.autoRow||'SMG',m,'auto');
+    if(dvA!=null){ const dd=advDiceDist('2d6'); let e=0,pk=0,ph=0;
+      advD10Dist(mod).forEach((p,tot)=>{ if(tot>dvA){ const mult=Math.min(tot-dvA,w.autoMult); const x=advDamage(dd,bonus,mult,sp,t.hp); e+=p*x.e; pk+=p*x.pk; ph+=p; } });
+      const au=make('auto',ph,e,pk,dvA,assumed?'range unknown, DV 13 assumed':'autofire');
+      if(au.score>best.score) best=au; } }
+  return best; }
+
+function advCurrentAiProfile(c){ const ai=c.ai&&typeof c.ai==='object'?c.ai:{}; return {ai,profile:String(ai.profile||'').toLowerCase()}; }
+function advAvg(str){ let a=0; advDiceDist(str).forEach((p,v)=>{ a+=v*p; }); return a; }
+function advFocusBonus(c,t,dmap,ai,profile){
+  const f=String(ai.focus||'').toLowerCase();
+  const hpPct=1-(t.hp/Math.max(1,t.hpMax));
+  const threat=(t.weapons||[]).reduce((mx,w)=>Math.max(mx,advAvg(w.dmg)+(w.dmgBonus||0)),0);
+  const nearest=Math.min(...dmap.values());
+  if(/near|close/.test(f)) return dmap.get(t.id)<=nearest?3:0;
+  if(/low|weak|wound|hurt/.test(f)) return 3*hpPct;
+  if(/threat|danger|biggest|strong|loud/.test(f)) return Math.min(3,threat/4);
+  if(profile==='flanker'||profile==='assassin') return 3*hpPct;
+  if(profile==='duelist') return Math.min(3,threat/4);
+  return 1.2*hpPct; }           /* default: finish the wounded */
+
+/* the same numbers gridMoveBudget() gives, but read-only (gridMoveBudget stamps the combatant, and suggestTurn must not touch state) */
+function advBudget(c){ const mv=gridMoveStat(c), stamp=roundNo+'|'+activeId, used=(c._mvStamp===stamp)?(c._mvUsed||0):0;
+  return {mv,used,remMove:Math.max(0,mv-used),remTotal:Math.max(0,mv*2-used)}; }
+/* The plan for one NPC's turn. Returns null when this combatant isn't one the advisor handles. Pure: changes nothing. */
+function suggestTurn(c){
+  if(!c||c.isCover||c.hp<=0||c.rosterId) return null;
+  const foes=advFoes(c);
+  if(!foes.length) return {actorId:c.id,mode:'none',summary:'No opponents left standing.',steps:[],reasons:[]};
+  const {ai,profile}=advCurrentAiProfile(c);
+  const placed=!theaterMode&&c.gridX!=null&&foes.every(f=>f.gridX!=null);
+  const hpPct=Math.round(100*c.hp/Math.max(1,c.hpMax));
+  const usable=c.weapons.map((w,i)=>({w,i})).filter(x=>!x.w.jammed&&!(x.w.reloading>0)&&(x.w.melee||x.w.mag==null||(x.w.ammo||0)>0));
+  const reasons=[];
+  /* nothing to shoot with: reload the best empty gun, or say so */
+  if(!usable.length){
+    const empty=c.weapons.map((w,i)=>({w,i})).find(x=>x.w.mag!=null&&(x.w.ammo||0)<=0&&!x.w.jammed&&!(x.w.reloading>0));
+    if(empty) return {actorId:c.id,mode:'reload',summary:'Reload the '+empty.w.name+' (it is empty) — that uses the Action.',
+      steps:[{type:'reload',weaponIdx:empty.i,weaponId:empty.w.id,weaponName:empty.w.name}],reasons:['No usable weapon: '+empty.w.name+' is out of ammo.']};
+    return {actorId:c.id,mode:'none',summary:'No usable weapon (jammed, reloading or none carried) — fall back or use the Action to unjam/improvise.',steps:[],reasons:[]}; }
+
+  /* map data */
+  let reach=null, walk=0, run=0, here={x:c.gridX,y:c.gridY};
+  if(placed){ const b=advBudget(c); walk=b.remMove; run=b.remTotal; reach=gridReach(c,Math.max(walk,run)); }
+  const dmap=new Map(foes.map(f=>[f.id,placed?advDistM(c.gridX,c.gridY,f):999]));   /* never written onto the combatants: this function must not change state */
+  const sorted=foes.slice().sort((a,b)=>dmap.get(a.id)-dmap.get(b.id));
+  const near=sorted.slice(0,4);
+  const cellOk=(x,y)=>{ if(x<0||y<0||x>=G.cols||y>=G.rows) return false; if(gridCellBlockedForChar(x,y,c.id)) return false;
+    const e=gridEnterableAt(x,y); return !e; };      /* never suggest perching on a chair or squeezing into a vehicle */
+  const cellsFor=limit=>{ const out=[]; if(!reach) return out; reach.forEach((steps,k)=>{ if(steps>limit) return; const [x,y]=k.split(',').map(Number);
+    if(steps===0||cellOk(x,y)) out.push({x,y,steps}); }); return out; };
+
+  /* ---- retreat? ---- */
+  const thr=ai.retreatAtHpPct!=null&&isFinite(parseInt(ai.retreatAtHpPct))?parseInt(ai.retreatAtHpPct):(profile==='coward'?75:null);
+  if(placed&&thr!=null&&profile!=='berserker'&&hpPct<=thr){
+    const cand=cellsFor(run); let bestR=null;
+    cand.forEach(p=>{ const dmin=Math.min(...near.map(f=>advDistM(p.x,p.y,f)));
+      const seen=near.filter(f=>gridLOS(f,{gridX:p.x,gridY:p.y})).length;
+      const cov=advCoversAt(p.x,p.y).length>0?1:0;
+      const sc=Math.min(dmin,40)*.35+(near.length-seen)*3+cov*2-p.steps*.05;
+      if(!bestR||sc>bestR.sc+1e-9||(Math.abs(sc-bestR.sc)<1e-9&&(p.steps<bestR.p.steps||(p.steps===bestR.p.steps&&(p.y<bestR.p.y||(p.y===bestR.p.y&&p.x<bestR.p.x)))))) bestR={p,sc,dmin,seen,cov}; });
+    const curDmin=Math.min(...near.map(f=>dmap.get(f.id)));
+    if(bestR&&(bestR.dmin-curDmin>=2||bestR.seen<near.length)&&(bestR.p.x!==c.gridX||bestR.p.y!==c.gridY)){
+      const cv=advCoversAt(bestR.p.x,bestR.p.y)[0]||null;
+      reasons.push('HP is '+hpPct+'% (retreats at '+thr+'%).');
+      reasons.push(bestR.seen===0?'That spot breaks line of sight to every nearby opponent.':'That spot is '+bestR.dmin+' m from the nearest opponent (now '+curDmin+' m).');
+      if(cv) reasons.push('Cover there: '+cv.name+'.');
+      return {actorId:c.id,mode:'retreat',summary:'Fall back '+bestR.p.steps+' square'+(bestR.p.steps===1?'':'s')+' '+advDir(bestR.p.x-c.gridX,bestR.p.y-c.gridY)+(cv?' behind '+cv.name:'')+' — Run (uses the Action); don\'t attack.',
+        steps:[{type:'move',to:{x:bestR.p.x,y:bestR.p.y},squares:bestR.p.steps,run:true,cover:cv?{id:cv.id,name:cv.name}:null}],reasons}; }
+    reasons.push('Wants to retreat ('+hpPct+'% HP) but nowhere better to run to — fights on.'); }
+
+  /* ---- hold cover? ---- */
+  const stay=String(ai.stayInCoverUntil||'').toLowerCase();
+  const holdRound=(stay.match(/round\s*(\d+)/)||[])[1];
+  const curCovers=placed?advCoversAt(c.gridX,c.gridY):[];
+  const coveredNow=placed&&near.length&&curCovers.some(cv=>gridCoverBetween(cv,{x:c.gridX,y:c.gridY},near[0]));
+  const holding=!!stay&&placed&&curCovers.length>0&&(holdRound?roundNo<parseInt(holdRound):(/flank/.test(stay)?coveredNow:false));
+
+  /* ---- attack: choose target, weapon, fire mode and (on a map) the cell to shoot from ---- */
+  const cells=placed?(holding?[{x:c.gridX,y:c.gridY,steps:0}]:cellsFor(walk)):[{x:null,y:null,steps:0}];
+  const wCover=/aggress|berserk|duelist/.test(profile)?.25:/cautious|sniper|coward/.test(profile)?1.4:1;
+  const pr=Array.isArray(ai.preferRange)&&ai.preferRange.length===2?[parseInt(ai.preferRange[0]),parseInt(ai.preferRange[1])]:null;
+  let best=null; const table=[];
+  sorted.slice(0,6).forEach(t=>{
+    let bt=null;
+    cells.forEach(p=>{
+      const m=placed?advDistM(p.x,p.y,t):null;
+      usable.forEach(({w,i})=>{
+        if(placed){ if(w.melee){ if(!advAdjacentTo(p.x,p.y,t)) return; } else if(!gridLOS({gridX:p.x,gridY:p.y},t)) return; }
+        const o=advOption(c,w,t,placed?m:null);
+        if(!o) return;
+        let pos=0; const why=[];
+        if(placed){
+          const covs=advCoversAt(p.x,p.y);
+          if(covs.length){ const between=covs.filter(cv=>near.some(f=>gridCoverBetween(cv,{x:p.x,y:p.y},f)));
+            pos+=(between.length?2.6:1.2)*wCover; why.push(between.length?'cover that also screens it from another enemy':'cover right beside it'); }
+          const seen=near.filter(f=>f.id!==t.id&&gridLOS(f,{gridX:p.x,gridY:p.y})).length; pos-=seen*.7;
+          if(!w.melee&&near.some(f=>advAdjacentTo(p.x,p.y,f))) pos-=1.6;
+          if(pr&&m!=null&&!w.melee){ const dev=m<pr[0]?pr[0]-m:m>pr[1]?m-pr[1]:0; pos-=dev/5; if(!dev) why.push('inside its preferred '+pr[0]+'–'+pr[1]+' m'); }
+          if(profile==='sniper'&&!w.melee&&m!=null) pos+=Math.min(m,50)*.04;
+          if(/aggress|berserk/.test(profile)&&m!=null) pos+=Math.max(0,12-m)*.08;
+          pos-=p.steps*.03;
+        }
+        const total=o.score+pos;
+        const cand={t,w,wi:i,o,p,m,pos,total,why};
+        if(!bt||total>bt.total+1e-9||(Math.abs(total-bt.total)<1e-9&&(p.steps<bt.p.steps||(p.steps===bt.p.steps&&(p.y<bt.p.y||(p.y===bt.p.y&&p.x<bt.p.x)))))) bt=cand; }); });
+    if(bt){ bt.focus=advFocusBonus(c,t,dmap,ai,profile); bt.final=bt.total+bt.focus; table.push(bt);
+      if(!best||bt.final>best.final+1e-9) best=bt; } });
+
+  if(!best){
+    /* nothing can be attacked from anywhere reachable: advance on the nearest foe (or say so) */
+    if(placed&&run>0){ const t=sorted[0], cand=cellsFor(run);
+      let adv=null; cand.forEach(p=>{ const d=advDistM(p.x,p.y,t); if(!adv||d<adv.d-1e-9||(Math.abs(d-adv.d)<1e-9&&p.steps<adv.p.steps)) adv={p,d}; });
+      if(adv&&(adv.p.x!==c.gridX||adv.p.y!==c.gridY)){
+        const mel=usable.some(x=>x.w.melee);
+        return {actorId:c.id,mode:'advance',summary:'Run '+adv.p.steps+' square'+(adv.p.steps===1?'':'s')+' '+advDir(adv.p.x-c.gridX,adv.p.y-c.gridY)+' toward '+t.name+' ('+adv.d+' m away after) — no shot or strike is possible this turn.',
+          steps:[{type:'move',to:{x:adv.p.x,y:adv.p.y},squares:adv.p.steps,run:true,cover:null}],
+          reasons:[mel?'Only melee reaches, and '+t.name+' is too far to strike this turn.':'No line of sight or no range from any square it can reach.']}; } }
+    return {actorId:c.id,mode:'none',summary:'No attack is possible from here or from any square it can reach — hold position or reposition by hand.',steps:[],reasons}; }
+
+  const b=best, steps=[];
+  const moved=placed&&(b.p.x!==c.gridX||b.p.y!==c.gridY);
+  let cv=null;
+  if(moved){ const covs=advCoversAt(b.p.x,b.p.y); cv=(covs.find(k=>near.some(f=>gridCoverBetween(k,{x:b.p.x,y:b.p.y},f)))||covs[0]||null);
+    steps.push({type:'move',to:{x:b.p.x,y:b.p.y},squares:b.p.steps,run:false,cover:cv?{id:cv.id,name:cv.name}:null}); }
+  steps.push({type:'attack',targetId:b.t.id,targetName:b.t.name,weaponIdx:b.wi,weaponName:b.w.name,fireMode:b.o.mode,rangeM:placed?b.m:null,dv:b.o.dv,hitPct:Math.round(b.o.hit*100),expDmg:b.o.e,killPct:Math.round(b.o.pk*100),melee:!!b.w.melee});
+  const wlabel=b.w.name+(b.o.mode==='auto'?' (autofire)':'');
+  const where=moved?('Move '+b.p.steps+' square'+(b.p.steps===1?'':'s')+' '+advDir(b.p.x-c.gridX,b.p.y-c.gridY)+(cv?' behind '+cv.name:'')+', then '):(holding?'Hold position and ':(placed?'Stay put and ':''));
+  const raw=where+(b.w.melee?'strike ':'shoot ')+b.t.name+' with the '+wlabel+(b.o.dv!=null&&placed?' (DV '+b.o.dv+', '+b.m+' m)':'')+'.';
+  const summary=raw.charAt(0).toUpperCase()+raw.slice(1);
+  if(holding) reasons.push('Holding cover ('+(holdRound?'until round '+holdRound:'until flanked')+').');
+  if(placed&&b.p.steps>0) reasons.push('Reaches that square in '+b.p.steps+' of its '+walk+' squares of movement.');
+  b.why.forEach(w=>reasons.push('The square gives '+w+'.'));
+  reasons.push('About '+Math.round(b.o.hit*100)+'% to hit'+(b.o.note?' ('+b.o.note+')':'')+', ≈'+b.o.e.toFixed(1)+' HP expected'+(b.o.pk>.02?', '+Math.round(b.o.pk*100)+'% chance to drop '+b.t.name:'')+'.');
+  if(ai.focus) reasons.push('Its brief says to target: '+String(ai.focus).slice(0,40)+'.');
+  if(profile) reasons.push('Profile: '+profile+'.');
+  if(!placed) reasons.push('No map positions (Theater of the Mind or unplaced tokens) — range and movement are for you to judge.');
+  const alts=table.filter(x=>x!==b).sort((a,z)=>z.final-a.final).slice(0,2).map(x=>x.t.name+' ('+x.w.name+', '+Math.round(x.o.hit*100)+'% for ≈'+x.o.e.toFixed(1)+')');
+  if(alts.length) reasons.push('Next best: '+alts.join('; ')+'.');
+  return {actorId:c.id,mode:'attack',summary,steps,reasons,score:+b.final.toFixed(2)}; }
+
+/* ---- using a suggestion ---- */
+let _advMemo={key:'',val:null};
+function advKey(c){ return [c.id,roundNo,theaterMode?1:0,G.cols,G.rows,c.hp,c.gridX,c.gridY,c._mvUsed||0,
+  c.weapons.map(w=>(w.ammo||0)+':'+(w.reloading||0)+(w.jammed?'j':'')).join(','),
+  combatants.map(x=>x.id.slice(-3)+x.hp+':'+x.gridX+','+x.gridY+(x.isCover?'c':'')).join('|')].join('#'); }
+function advCurrent(id){ const c=find(id); if(!c) return null; const k=advKey(c);
+  if(_advMemo.key!==k) _advMemo={key:k,val:suggestTurn(c)}; return _advMemo.val; }
+function advInvalidate(){ _advMemo={key:'',val:null}; }
+function advStampOf(c){ return roundNo+'|'+c.id; }
+/* walk the token along the plan: same bookkeeping as dragging it (movement budget, automatic cover) */
+function advApplyMove(id){ const c=find(id), s=c&&advCurrent(id); const mv=s&&s.steps.find(x=>x.type==='move'); if(!mv) return false;
+  const reach=gridReach(c,mv.squares); const key=mv.to.x+','+mv.to.y;
+  if(!reach||!reach.has(key)||gridCellBlockedForChar(mv.to.x,mv.to.y,c.id)){ toast('That square is no longer reachable — suggestion refreshed'); advInvalidate(); renderTurnBar(); try{ gridUpdateHUD(); }catch(e){} return false; }
+  gridMoveBudget(c); c._mvUsed=(c._mvUsed||0)+reach.get(key);
+  const from={x:c.gridX,y:c.gridY}; c.gridX=mv.to.x; c.gridY=mv.to.y;
+  logEvent('➜ '+c.name+(mv.run?' runs ':' moves ')+reach.get(key)+' square'+(reach.get(key)===1?'':'s')+' ('+advDir(mv.to.x-from.x,mv.to.y-from.y)+')'+(mv.cover?' to '+mv.cover.name:''),'');
+  gridAutoAssignCover(); advInvalidate(); G.advHint=null; save(); renderCombat(); try{ gridDraw(); gridUpdateHUD(); }catch(e){} return true; }
+function advOpenAttack(id){ const c=find(id), s=c&&advCurrent(id); const at=s&&s.steps.find(x=>x.type==='attack'); if(!at) return;
+  const t=find(at.targetId); if(!t||t.hp<=0){ toast('That target is gone — suggestion refreshed'); advInvalidate(); renderTurnBar(); return; }
+  if(at.rangeM!=null&&!theaterMode) openShoot(c.id,{targetId:t.id,wi:at.weaponIdx,range:at.rangeM,fromMap:true});
+  else { openShoot(c.id,{wi:at.weaponIdx}); selectTarget(t.id); }
+  if(at.fireMode==='auto'&&!at.melee) setFireMode('auto'); }
+function advDoIt(id){ const c=find(id), s=c&&advCurrent(id); if(!s) return;
+  document.getElementById('tempModal')&&document.getElementById('tempModal').classList.remove('open');
+  const hasMove=s.steps.some(x=>x.type==='move'), hasAtk=s.steps.some(x=>x.type==='attack'), rl=s.steps.find(x=>x.type==='reload');
+  if(hasMove&&!advApplyMove(id)) return;
+  c._advDone=advStampOf(c);
+  if(rl){ reloadWeapon(c.id,rl.weaponId); advInvalidate(); renderTurnBar(); try{ gridUpdateHUD(); }catch(e){} return; }
+  if(hasAtk){ const s2=advCurrent(id); /* after moving, re-plan so range/DV are exact from the new square */
+    advOpenAttack(id); }
+  else { advInvalidate(); renderTurnBar(); try{ gridUpdateHUD(); }catch(e){} } }
+function advRedo(id){ const c=find(id); if(c) c._advDone=null; advInvalidate(); renderTurnBar(); try{ gridUpdateHUD(); }catch(e){} }
+
+/* ---- UI: one-line strip under the turn bar (list) and above the map HUD ---- */
+function advActive(){ if(!advisorOn||!activeId) return null; const c=find(activeId); if(!c||c.isCover||c.hp<=0||c.rosterId) return null; return c; }
+function advStripHtml(){ const c=advActive(); if(!c){ G.advHint=null; return ''; }
+  if(c._advDone===advStampOf(c)){ G.advHint=null;
+    return '<div class="advice done"><div class="adv-main"><b>'+esc(c.name)+'</b> has used its turn — press END TURN.</div><div class="adv-actions"><button onclick="advRedo(\''+c.id+'\')">↻</button></div></div>'; }
+  const s=advCurrent(c.id); if(!s){ G.advHint=null; return ''; }
+  const mv=s.steps.find(x=>x.type==='move'); G.advHint=mv?{x:mv.to.x,y:mv.to.y,from:{x:c.gridX,y:c.gridY},run:!!mv.run}:null;
+  const can=s.steps.length>0;
+  return '<div class="advice"><div class="adv-main"><span class="adv-tag">Suggested</span> '+esc(s.summary)+'</div>'+
+    '<div class="adv-actions">'+(can?'<button class="adv-go" onclick="advDoIt(\''+c.id+'\')">DO IT</button>':'')+
+    '<button onclick="openAdvice(\''+c.id+'\')" aria-label="Why this suggestion">WHY?</button></div></div>'; }
+let _advHintSig='', _advLast='';
+function advRefreshStrips(){ const html=advStripHtml();
+  const a=document.getElementById('turnAdvice'); if(a&&a.dataset.adv!==html){ a.innerHTML=html; a.dataset.adv=html; }
+  /* the map redraws every frame while panning/dragging: only touch the DOM when the strip actually changed */
+  const g=document.getElementById('gridAdvice'); if(g&&_advLast!==html){ _advLast=html; g.innerHTML=html; g.style.display=html?'':'none'; }
+  const sig=JSON.stringify(G.advHint||null); if(sig!==_advHintSig){ _advHintSig=sig; requestAnimationFrame(()=>{ try{ gridDraw(); }catch(e){} }); } }
+function openAdvice(id){ const c=find(id), s=c&&advCurrent(id); if(!s){ toast('Nothing to suggest right now'); return; }
+  const ai=c.ai&&Object.keys(c.ai).length?'<div class="hint" style="margin:0 0 10px;">Brief: '+esc(encAiNote(c.ai).replace(/^🧠\s*/,''))+'</div>':'';
+  const steps=s.steps.map((x,i)=>'<li>'+(x.type==='move'?(x.run?'Run':'Move')+' '+x.squares+' square'+(x.squares===1?'':'s')+(x.cover?' to '+esc(x.cover.name):''):
+    x.type==='attack'?(x.melee?'Strike ':'Shoot ')+esc(x.targetName)+' with the '+esc(x.weaponName)+(x.fireMode==='auto'?' (autofire)':'')+(x.dv!=null?' — DV '+x.dv:'')+' · ≈'+x.hitPct+'% to hit, ≈'+x.expDmg.toFixed(1)+' HP':
+    'Reload the '+esc(x.weaponName))+'</li>').join('');
+  showModal('Suggested turn — '+c.name,
+    '<div style="font-weight:600;margin-bottom:8px;">'+esc(s.summary)+'</div>'+ai+
+    (steps?'<ol style="margin:0 0 10px 18px;padding:0;line-height:1.6;">'+steps+'</ol>':'')+
+    '<div class="sl">WHY</div><ul style="margin:4px 0 12px 18px;padding:0;line-height:1.55;font-size:13px;">'+s.reasons.map(r=>'<li>'+esc(r)+'</li>').join('')+'</ul>'+
+    '<div style="display:flex;gap:8px;">'+(s.steps.length?'<button class="btn" style="flex:1;" onclick="advDoIt(\''+c.id+'\')">DO IT</button>':'')+
+    (s.steps.some(x=>x.type==='move')&&s.steps.some(x=>x.type==='attack')?'<button class="btn ghost" style="flex:1;" onclick="document.getElementById(\'tempModal\').classList.remove(\'open\');advApplyMove(\''+c.id+'\')">MOVE ONLY</button>':'')+'</div>'+
+    '<div class="hint" style="margin-top:10px;">A suggestion, not an order — it assumes a body shot, ignores crits and special ammo, and can\'t see anything the map doesn\'t show. See the docs for how it decides.</div>'); }
+
+/* ============ DOCS TAB, CLAUDE BRIEF & CAMPAIGN LOG ============
+   The DOCS tab does two jobs.
+   1. "Brief for Claude": one tap copies a document that tells Claude exactly how to write an encounter this app can import —
+      the format, every valid weapon/armor/template/scene/ammo name, damage-vs-armor numbers, optionally your party and the
+      story so far. It is GENERATED from the same catalogs importEncounter() validates against, so it cannot go stale
+      (tests/brief.js imports every name it lists). See docs/CLAUDE-BRIEF.md.
+   2. A campaign log: short persistent text entries, with a one-tap auto-written recap of the fight. It feeds the brief too. */
+
+/* The documented encounter fields. Single source for the brief's field table AND for the test that proves each one is accepted. */
+const ENC_FIELDS=[
+  {f:'template',d:'Stat block to start from',ex:'Mook',v:'Mook | LT | Light Mini Boss | Heavy Mini Boss | Light Boss | Heavy Boss'},
+  {f:'tier',d:'Reward tier (and picks a template if none given)',ex:'MINI BOSS',v:'STANDARD | MINI BOSS | BOSS | VEHICLE'},
+  {f:'name',d:'Display name; duplicates are numbered automatically',ex:'Maelstrom Booster'},
+  {f:'qty',d:'How many (1–20; 40 combatants max per file)',ex:2},
+  {f:'hp',d:'Hit points override (1–999)',ex:35},
+  {f:'sp',d:'Armor SP for head and body (0–30)',ex:9},
+  {f:'headSp',d:'Head SP only',ex:11},
+  {f:'bodySp',d:'Body SP only',ex:9},
+  {f:'armor',d:'A catalog armor name — sets head and body SP',ex:'Kevlar®'},
+  {f:'cn',d:'Combat number added to attacks and dodges (0–30)',ex:12},
+  {f:'dodge',d:'true if it can dodge ranged attacks',ex:true},
+  {f:'move',d:'MOVE in squares (1–20)',ex:7},
+  {f:'init',d:'Initiative modifier (-20–40)',ex:3},
+  {f:'weapons',d:'Up to 6: catalog names, or {name,dmg,rangeRow,mag,rof,skill,melee} for a custom one',ex:['Heavy Pistol','Light Melee']},
+  {f:'ammo',d:'Ammo type for its ranged weapons',ex:'ap'},
+  {f:'vehicle',d:'{name,type,sdp,sp,seats,move}: spawns a vehicle; first of the group drives',ex:{name:'Gang Bike',type:'Roadbike',sdp:35,sp:0,seats:2,move:20}},
+  {f:'ai',d:'Behaviour brief (see "AI behaviour")',ex:{profile:'cautious',stayInCoverUntil:'flanked',retreatAtHpPct:40,focus:'nearest',preferRange:[6,25],notes:'Barks orders.'}},
+  {f:'note',d:'Free text shown on the card (loot, tells, secrets)',ex:'Carries a stolen shard.'}
+];
+const AI_PROFILES=[
+  ['aggressive','Rushes the nearest target, ignores cover, closes the distance'],
+  ['cautious','Values cover highly, holds it, avoids being seen by several enemies'],
+  ['sniper','Wants a clear line of sight at long range, inside its preferRange'],
+  ['flanker','Goes for the most wounded or weakest target'],
+  ['duelist','Seeks the most dangerous foe, wants melee, little interest in cover'],
+  ['coward','Falls back when hurt (retreats at 75% HP unless retreatAtHpPct says otherwise)'],
+  ['berserker','Charges and never retreats, whatever retreatAtHpPct says']
+];
+/* a complete encounter built only from the documented examples above — tests/brief.js imports this */
+function encKitchenSink(){ const e={}; ENC_FIELDS.forEach(x=>{ e[x.f]=JSON.parse(JSON.stringify(x.ex)); }); e.tier='MINI BOSS';
+  return {app:'cpred_encounter',v:1,name:'Kitchen sink',summary:'Every documented field at once.',scene:'Alleyway',enemies:[e,{template:'Mook',name:'Plain Mook',weapons:['SMG']}],
+    allies:[{template:'LT',name:'Friendly LT',weapons:['Shotgun']}],rewards:{eb:100,ip:5,notes:'Everything.',bonuses:[{label:'Bonus',eb:10,ip:1}]}}; }
+
+/* ---- campaign log ---- */
+let sessionLog=[]; try{ sessionLog=JSON.parse(store.get('cpred_sessionlog')||'[]'); if(!Array.isArray(sessionLog)) sessionLog=[]; }catch(e){ sessionLog=[]; }
+let logEditId=null;
+function saveSessionLog(){ store.set('cpred_sessionlog',JSON.stringify(sessionLog)); scheduleAutoSync(); }
+function logAdd(text,kind){ text=String(text==null?'':text).replace(/\s+/g,' ').trim().slice(0,600); if(!text) return null;
+  const e={id:uid(),at:new Date().toISOString(),kind:kind||(/^session\b/i.test(text)?'session':'note'),text};
+  sessionLog.push(e); if(sessionLog.length>500) sessionLog=sessionLog.slice(-500); saveSessionLog(); docsRefreshLog(); return e; }
+function logSubmit(){ const i=document.getElementById('clogInput'); if(!i) return; if(logAdd(i.value)) i.value=''; }
+function logChip(prefix){ const i=document.getElementById('clogInput'); if(!i) return;
+  if(prefix==='Session '){ prefix='Session '+(sessionLog.filter(e=>e.kind==='session').length+1)+' — '; }
+  i.value=prefix; i.focus(); try{ i.setSelectionRange(prefix.length,prefix.length); }catch(e){} }
+function logDel(id){ if(!confirm('Delete this log entry?')) return; sessionLog=sessionLog.filter(e=>e.id!==id); saveSessionLog(); docsRefreshLog(); }
+function logEdit(id){ logEditId=id; docsRefreshLog(); const t=document.getElementById('clogEditText'); if(t) t.focus(); }
+function logEditSave(id){ const t=document.getElementById('clogEditText'), e=sessionLog.find(x=>x.id===id); if(e&&t){ const v=t.value.replace(/\s+/g,' ').trim().slice(0,600); if(v) e.text=v; } logEditId=null; saveSessionLog(); docsRefreshLog(); }
+function logEditCancel(){ logEditId=null; docsRefreshLog(); }
+function logGroupNames(list){ const m=new Map(); list.forEach(n=>{ const b=String(n).replace(/\s+#\d+$/,''); m.set(b,(m.get(b)||0)+1); });
+  return [...m].map(([b,k])=>k>1?b+' ×'+k:b).join(', '); }
+/* the auto-written recap of the fight: who fell, who is hurt, what was awarded */
+function logCompose(){ const enc=rwEnc(); const dead=new Map();
+  Object.keys(enc.names||{}).forEach(id=>{ if(enc.kills[id]||enc.paid[id]) dead.set(id,enc.names[id]); });
+  combatants.forEach(c=>{ if(c.side==='enemy'&&!c.isCover&&c.hp<=0) dead.set(c.id,c.name); });
+  const alive=combatants.filter(c=>c.side==='enemy'&&!c.isCover&&c.hp>0).map(c=>c.name);
+  const party=combatants.filter(c=>c.side==='ally'&&!c.isCover&&c.rosterId).map(c=>c.name+(c.hp<=0?' is down':' '+c.hp+'/'+c.hpMax+' HP'));
+  const notable=combatLog.filter(e=>e.k==='death'||e.k==='crit').slice(-3).map(e=>e.m.replace(/^[^\wA-Za-z]+/,'').slice(0,90));
+  const claim=enc.claims.length?enc.claims[enc.claims.length-1].summary:'';
+  const bits=[(enc.name||'Fight')+' — '+roundNo+' round'+(roundNo===1?'':'s')+'.'];
+  if(dead.size) bits.push('Defeated: '+logGroupNames([...dead.values()])+'.');
+  if(alive.length) bits.push('Still standing: '+logGroupNames(alive)+'.');
+  if(party.length) bits.push('Party: '+party.join(', ')+'.');
+  if(notable.length) bits.push('Notable: '+notable.join('; ')+'.');
+  if(claim) bits.push('Paid: '+claim+'.');
+  return bits.join(' ').slice(0,600); }
+function logRecap(){ const i=document.getElementById('clogInput'); if(!i) return; i.value=logCompose(); i.focus(); }
+function logMarkdown(entries){ return (entries||sessionLog).map(e=>'- '+(e.at?String(e.at).slice(0,10):'')+' '+(e.kind==='encounter'?'[fight] ':e.kind==='session'?'[session] ':'')+e.text).join('\n'); }
+function logCopy(){ copyText(logMarkdown(),document.getElementById('clogMsg'),'Copied the whole log.'); }
+
+/* ---- generic copy / download ---- */
+function copyText(text,msgEl,okMsg){ const done=()=>{ if(msgEl) msgEl.textContent=okMsg||'Copied.'; toast(okMsg||'Copied'); };
+  const fallback=()=>{ const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); done(); }catch(e){ if(msgEl) msgEl.textContent='Could not copy — open Preview and copy by hand.'; } document.body.removeChild(ta); };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(fallback); else fallback(); }
+function downloadText(name,text,mime){ const blob=new Blob([text],{type:mime||'text/plain'}), url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download=name; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(()=>URL.revokeObjectURL(url),1000); }
+
+/* ---- the brief ---- */
+let briefOpts={party:true,log:true,logN:10,example:true};
+try{ Object.assign(briefOpts,JSON.parse(store.get('cpred_briefopts')||'{}')); }catch(e){}
+function mdCell(v){ return String(v==null?'':v).replace(/\|/g,'\\|').replace(/\n/g,' '); }
+function mdTable(h,rows){ return '| '+h.join(' | ')+' |\n|'+h.map(()=>'---').join('|')+'|\n'+rows.map(r=>'| '+r.map(mdCell).join(' | ')+' |').join('\n'); }
+function htmlTable(h,rows){ return '<div class="ref-scroll"><table class="ref-table"><thead><tr>'+h.map(x=>'<th>'+esc(x)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+esc(c==null?'':c)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'; }
+/* the reference data, defined once, rendered as Markdown for Claude and as HTML for the screen */
+function docsData(){
+  const tpl=NPC_LIB.filter(n=>!n.vehicle).map(n=>[n.name,n.tier,n.hp,n.sp,n.cn,n.dodge?'yes':'no']);
+  const wp=WEAPONS.map(w=>[w.name,w.dmg,w.melee?'melee':(w.mag!=null?w.mag:'—'),w.rof||1,w.melee?'—':(w.rangeRow||'—'),w.autoMult?'autofire ×'+w.autoMult:'',w.areaMode?'area ('+w.areaMode+')':'']);
+  const sps=[4,7,11,13];
+  const dmg=WEAPONS.map(w=>{ const d=advDiceDist(w.dmg); const cell=sp=>advDamage(d,0,1,w.melee?Math.floor(sp/2):sp,999).e.toFixed(1); return [w.name,advAvg(w.dmg).toFixed(1)].concat(sps.map(cell)); });
+  const arm=ARMOR_CATALOG.map(a=>[a.name,a.sp,a.penalty?a.penalty:'—',a.note||'']);
+  const ammo=Object.keys(AMMO).map(k=>[k,AMMO[k].label+(AMMO[k].note?' — '+AMMO[k].note:'')]);
+  const scenes=GRID_PRESETS.map(p=>[p.name,p.size,p.desc]);
+  const rew=Object.keys(REWARD_TABLE).map(t=>[t,REWARD_TABLE[t].eb,REWARD_TABLE[t].ip]);
+  const fields=ENC_FIELDS.map(x=>[x.f,x.d+(x.v?' ('+x.v+')':''),typeof x.ex==='object'?JSON.stringify(x.ex):String(x.ex)]);
+  return {tpl,wp,dmg,arm,ammo,scenes,rew,fields,sps}; }
+function briefParty(){ return roster.map(r=>{ const s=r.stats||{}; const roles=(r.roles&&r.roles.length)?r.roles.map(x=>x.role+' '+x.rank).join(' / '):(r.role||'');
+  const w=(r.weapons||[]).map(x=>x.name+' '+x.dmg).join(', ')||'none';
+  return [r.name||'(unnamed)',roles,r.hpMax||'?',(r.headSPMax||0)+' / '+(r.bodySPMax||0),s.ref||0,s.move||0,s.body||0,w]; }); }
+function buildClaudeBrief(o){ o=Object.assign({},briefOpts,o||{}); const D=docsData();
+  const ex=EXAMPLE_ENCOUNTERS[0].data;
+  const parts=[];
+  parts.push('# Encounter brief for RED // Companion (Cyberpunk RED)\n\n'+
+    'You are helping me prepare fights for a **Cyberpunk RED** game. I run them in a phone app called RED // Companion. When I ask for an encounter, reply with **one JSON code block** that the app can import directly (Tools → Import encounter). Keep your table talk outside the code block.\n\n'+
+    '**Only use the names listed below.** Anything else is skipped with a warning (the rest still loads). Everything is Cyberpunk RED, set in Night City.');
+  parts.push('## What to include\n- `name`, a short GM-facing `summary`, and a `scene` (pick the one that fits).\n- `enemies`: each with a `template`, a `name`, `qty`, `weapons` and (optionally) `armor`; add an `ai` brief so whoever runs them knows how they fight.\n- `rewards`: `eb`, `ip`, a `notes` line and 1–2 `bonuses` for doing it the hard way.\n- Scale to my party below. Keep to 40 combatants or fewer.\n\n'+
+    'Shape:\n```json\n{"app":"cpred_encounter","v":1,"name":"","summary":"","scene":"","enemies":[{"template":"Mook","name":"","qty":1,"weapons":["Heavy Pistol"],"armor":"Kevlar®","ai":{"profile":"cautious","notes":""}}],"allies":[],"rewards":{"eb":0,"ip":0,"notes":"","bonuses":[{"label":"","eb":0,"ip":0}]}}\n```');
+  parts.push('## Enemy fields\n'+mdTable(['Field','Meaning','Example'],D.fields));
+  parts.push('## Stat templates\nStart from one of these; override any number with the fields above.\n'+mdTable(['Template','Tier','HP','SP','CN','Dodges'],D.tpl));
+  parts.push('## Weapons (use these exact names)\n'+mdTable(['Name','Damage','Magazine','ROF','Range table','Autofire','Area'],D.wp));
+  parts.push('## Armor (use these exact names)\n'+mdTable(['Name','SP','Penalty','Note'],D.arm));
+  parts.push('## How hard does a weapon hit?\nAverage HP damage **per hit that gets through armor** (damage minus SP; melee halves the target\'s SP). Use it to judge how long enemies take to wear down a character.\n'+
+    mdTable(['Weapon','Avg damage'].concat(D.sps.map(s=>'vs SP '+s)),D.dmg));
+  parts.push('## Ammo types (for the `ammo` field)\n'+mdTable(['Key','What it does'],D.ammo));
+  parts.push('## Scenes (use these exact names)\n'+mdTable(['Scene','Grid','Look'],D.scenes));
+  parts.push('## AI behaviour\n`ai.profile` is one of the words below; the rest are optional and refine it. The app uses them to suggest each enemy\'s move and attack.\n'+
+    mdTable(['Profile','Behaviour'],AI_PROFILES)+'\n\nOther `ai` keys: `stayInCoverUntil` ("flanked" or "round 3"), `retreatAtHpPct` (number), `focus` ("nearest", "lowest hp", "highest threat"), `preferRange` ([min,max] metres), `notes` (free text for the GM).');
+  parts.push('## Reward guidance\nHouse defaults the app suggests per defeated enemy (not rulebook values; I may overrule them):\n'+mdTable(['Tier','EB','IP'],D.rew)+'\nIP is per character; EB is split between the party.');
+  if(o.party){ const p=briefParty(); parts.push('## My party\n'+(p.length?mdTable(['Name','Role(s)','HP','Head / Body SP','REF','MOVE','BODY','Weapons'],p):'_No characters yet._')); }
+  if(o.log){ const n=Math.max(1,Math.min(50,parseInt(o.logN)||10)); const L=sessionLog.slice(-n);
+    parts.push('## The story so far (most recent last)\n'+(L.length?logMarkdown(L):'_Nothing logged yet._')); }
+  if(o.example) parts.push('## A complete example\n```json\n'+JSON.stringify(ex,null,1)+'\n```');
+  parts.push('## After you answer\nI paste your JSON into the app. If anything is off it lists notes ("Unknown weapon …"); I will send them back and you can fix just those. Offer a harder and an easier variant when I ask for "an encounter" and leave the choice to me.');
+  return parts.join('\n\n')+'\n'; }
+function briefTokens(t){ return Math.round(t.length/4); }
+function docsCopyBrief(){ const t=buildClaudeBrief(); copyText(t,document.getElementById('briefMsg'),'Brief copied ('+briefTokens(t).toLocaleString()+' tokens). Paste it into Claude.'); }
+function docsDownloadBrief(){ downloadText('cpred-claude-brief.md',buildClaudeBrief(),'text/markdown'); const m=document.getElementById('briefMsg'); if(m) m.textContent='Downloaded cpred-claude-brief.md'; }
+function docsSetOpt(k,v){ briefOpts[k]=v; store.set('cpred_briefopts',JSON.stringify(briefOpts)); docsRefreshBrief(); }
+function docsRefreshBrief(){ const t=buildClaudeBrief(), ta=document.getElementById('briefText'), s=document.getElementById('briefSize');
+  if(ta) ta.value=t; if(s) s.textContent='≈ '+briefTokens(t).toLocaleString()+' tokens · '+t.length.toLocaleString()+' characters'; }
+
+/* ---- the tab ---- */
+function docsLogHtml(){
+  const list=sessionLog.slice().reverse();
+  return (list.length?list.map(e=>{ const d=new Date(e.at), when=isNaN(d)?'':d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+    if(logEditId===e.id) return '<div class="log-entry editing"><textarea id="clogEditText" maxlength="600">'+esc(e.text)+'</textarea><div class="log-btns"><button class="btn sm" onclick="logEditSave(\''+e.id+'\')">SAVE</button><button class="btn sm ghost" onclick="logEditCancel()">CANCEL</button></div></div>';
+    return '<div class="log-entry k-'+esc(e.kind)+'"><div class="log-meta"><span class="log-when">'+esc(when)+'</span>'+(e.kind!=='note'?'<span class="log-kind">'+esc(e.kind==='encounter'?'fight':e.kind)+'</span>':'')+
+      '<span class="log-acts"><button onclick="logEdit(\''+e.id+'\')" aria-label="Edit entry">✎</button><button onclick="logDel(\''+e.id+'\')" aria-label="Delete entry">✕</button></span></div><div class="log-text">'+esc(e.text)+'</div></div>'; }).join('')
+   :'<div class="hint" style="padding:8px 0;">Nothing logged yet. Jot a line after each scene, or tap <b>Recap this fight</b> and the app writes it for you.</div>'); }
+function docsRefreshLog(){ const el=document.getElementById('clogList'); if(el) el.innerHTML=docsLogHtml(); const c=document.getElementById('clogCount'); if(c) c.textContent=sessionLog.length?'('+sessionLog.length+')':''; }
+function renderDocs(){ const el=document.getElementById('docs'); if(!el) return; const D=docsData(); const o=briefOpts;
+  const chk=(k,l)=>'<label class="docs-opt"><input type="checkbox" '+(o[k]?'checked ':'')+'onchange="docsSetOpt(\''+k+'\',this.checked)"> '+l+'</label>';
+  const sec=(t,body)=>'<details class="docs-ref"><summary>'+esc(t)+'</summary>'+body+'</details>';
+  el.innerHTML='<h2>Docs</h2>'+
+   '<div class="docs-card"><div class="docs-h">Brief for Claude</div>'+
+    '<div class="hint" style="margin:0 0 10px;">One tap copies everything Claude needs to write fights this app can import: the format, every valid weapon, armor, template and map, damage numbers, and optionally your party and the story so far. Built live from the app, so it is always current.</div>'+
+    chk('party','Include my party')+chk('log','Include the campaign log <select onchange="docsSetOpt(\'logN\',parseInt(this.value))" style="width:auto;padding:4px 8px;display:inline-block;">'+[5,10,20,50].map(n=>'<option value="'+n+'"'+(o.logN===n?' selected':'')+'>last '+n+'</option>').join('')+'</select>')+chk('example','Include a worked example')+
+    '<div class="docs-actions"><button class="btn" style="flex:2;" onclick="docsCopyBrief()">COPY BRIEF</button><button class="btn ghost" style="flex:1;" onclick="docsDownloadBrief()">DOWNLOAD</button></div>'+
+    '<div class="hint" id="briefSize" style="margin-top:8px;"></div><div class="hint" id="briefMsg" style="color:var(--accent);"></div>'+
+    '<details class="docs-ref"><summary>Preview</summary><textarea id="briefText" readonly spellcheck="false" style="width:100%;min-height:200px;font-family:var(--mono);font-size:11px;"></textarea></details>'+
+    '<div class="hint" style="margin-top:10px;">Then ask Claude, e.g. <i>“Make a medium fight with the Tyger Claws in the Convenience Store.”</i> Paste its JSON into <b>Tools → Import encounter</b>.</div></div>'+
+   '<div class="docs-card"><div class="docs-h">Campaign log <span id="clogCount" class="hint" style="display:inline;margin:0;"></span></div>'+
+    '<div class="log-add"><input id="clogInput" maxlength="600" placeholder="What just happened?" onkeydown="if(event.key===\'Enter\'){logSubmit();}"><button class="btn" onclick="logSubmit()">ADD</button></div>'+
+    '<div class="log-chips"><button onclick="logRecap()" class="chip-hi">✎ Recap this fight</button>'+['Session ','Scene: ','NPC: ','Loot: ','Lead: ','Downtime: '].map(c=>'<button onclick="logChip(\''+c+'\')">'+esc(c.trim().replace(/:$/,''))+'</button>').join('')+'</div>'+
+    '<div id="clogList"></div><div class="docs-actions"><button class="btn ghost sm" onclick="logCopy()">COPY LOG</button></div><div class="hint" id="clogMsg"></div></div>'+
+   '<div class="docs-card"><div class="docs-h">Reference</div>'+
+    sec('Encounter fields',htmlTable(['Field','Meaning','Example'],D.fields))+sec('Stat templates',htmlTable(['Template','Tier','HP','SP','CN','Dodges'],D.tpl))+
+    sec('Weapons',htmlTable(['Name','Damage','Mag','ROF','Range table','Autofire','Area'],D.wp))+sec('Damage vs armor',htmlTable(['Weapon','Avg'].concat(D.sps.map(s=>'SP '+s)),D.dmg))+
+    sec('Armor',htmlTable(['Name','SP','Penalty','Note'],D.arm))+sec('Ammo',htmlTable(['Key','Effect'],D.ammo))+sec('Scenes',htmlTable(['Scene','Grid','Look'],D.scenes))+
+    sec('AI behaviour',htmlTable(['Profile','Behaviour'],AI_PROFILES))+sec('Reward defaults',htmlTable(['Tier','EB','IP'],D.rew))+'</div>';
+  docsRefreshBrief(); docsRefreshLog(); }
 
 /* ============ THEMES ============
    Palettes live in CSS (html[data-theme=...]); this is just the registry, persistence and the picker.

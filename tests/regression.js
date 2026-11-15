@@ -80,6 +80,25 @@ run('regression', [
     return p.waitForFunction(() => { const c = document.getElementById('gridCanvas'), d = window.devicePixelRatio || 1;
       return Math.abs(c.width / d - c.offsetWidth) <= 1 && Math.abs(c.height / d - c.offsetHeight) <= 1; }, null, { timeout: 5000 }).then(() => true, () => false);
   }],
+  ['movement reach is recomputed when another token steps onto a square (no stale "reachable" squares)', async p => p.evaluate(() => {
+    combatants.length = 0; G.cols = 20; G.rows = 20;
+    const mk = (n, x, y) => { const c = encBuildNpc({ template: 'Mook', name: n, weapons: ['Medium Pistol'] }, 'enemy', [], null, null); c.gridX = x; c.gridY = y; combatants.push(c); return c; };
+    const a = mk('A', 5, 5), b = mk('B', 10, 10);
+    const before = gridReach(a, 6).has('7,5'); b.gridX = 7; b.gridY = 5;
+    const after = gridReach(a, 6).has('7,5');
+    b.gridX = 10; b.gridY = 10; const freed = gridReach(a, 6).has('7,5');                 // and it comes back when they leave
+    return before && !after && freed;
+  })],
+  ['no two elements share an id on any screen (getElementById would silently hit the wrong one)', async p => p.evaluate(t => {
+    applyRosterImport(t, {}); importEncounter(JSON.parse(JSON.stringify(EXAMPLE_ENCOUNTERS[3].data)), { replace: true }); addRosterToCombat(roster[0].id, 'ally'); logAdd('x');
+    const closeAll = () => document.querySelectorAll('.modal.open').forEach(m => m.classList.remove('open')), dups = new Set(), nav = i => document.querySelectorAll('nav button')[i];
+    const scan = name => { const seen = new Map(); document.querySelectorAll('[id]').forEach(e => seen.set(e.id, (seen.get(e.id) || 0) + 1)); seen.forEach((n, id) => { if (n > 1) dups.add(id + ' x' + n + ' @' + name); }); };
+    const steps = { map: () => {}, list: () => setMapMode('list'), dice: () => showView('dice', nav(1)), chars: () => showView('roster', nav(2)), docs: () => showView('docs', nav(3)), tools: () => openTools(),
+      import: () => openEncounterImport(), rewards: () => openRewards(), picker: () => openThemePicker(), why: () => { const n = combatants.find(c => c.side === 'enemy' && !c.isCover); activeId = n.id; advInvalidate(); openAdvice(n.id); },
+      shoot: () => { setMapMode('list'); openShoot(combatants.find(c => c.side === 'ally').id); }, sheet: () => { closeAll(); openCharSheet(roster[0].id); }, saveload: () => { closeAll(); openSaveLoad(); }, cloud: () => { closeAll(); openCloudSync(); } };
+    for (const [n, f] of Object.entries(steps)) { try { f(); scan(n); } catch (e) { dups.add('THROW ' + n + ': ' + e.message); } }
+    if (dups.size) console.log([...dups]); return dups.size === 0;
+  }, tc)],
   ['full backup round-trips losslessly (modulo migration defaults)', async p => p.evaluate(t => {
     applyRosterImport(t, {}); addRosterToCombat(roster[0].id, 'ally'); libSide = 'enemy'; libQty[0] = 1; addFromLibrary(0);
     const d = JSON.parse(JSON.stringify(buildBackupData())); applyBackupData(JSON.parse(JSON.stringify(d))); const a = JSON.parse(JSON.stringify(buildBackupData()));

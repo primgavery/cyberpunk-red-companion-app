@@ -21,6 +21,8 @@ optional GitHub-Gist sync keeps devices in step.
   writes HP/ammo/injuries back.
 - **Vehicles, Gigs, Net Architectures** — deployable vehicles, a shared job log, and runnable netrunning scenes (ICE, demons, programs).
 - **Encounters & rewards** — import a prepared fight as JSON (five Cyberpunk RED examples built in): enemies, gear, map scene and AI behaviour notes load in one step. Afterwards the app *suggests* EB and IP from what was defeated and pays it into each character's ledger.
+- **Turn suggestions** — on an NPC's turn the app suggests where to move and what to shoot (with reasons); DO IT moves the token and opens the attack screen pre-filled. Never automatic.
+- **Docs tab** — one tap copies a brief that tells Claude exactly how to write encounters this app can import (every valid name, damage numbers, optionally your party and the story so far), plus a campaign log with auto-written fight recaps.
 - **Themes** — Slate (default), Paper (light), Ember (warm) and the original Neon, switchable in Tools → Display. All four are checked for readable contrast on every screen.
 - **Dice, calculator, notes**, full-backup export, and cloud auto-sync with a conflict guard.
 
@@ -32,11 +34,13 @@ optional GitHub-Gist sync keeps devices in step.
 | [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | every localStorage key, the combatant / character / vehicle shapes, backup formats, cloud sync |
 | [docs/RULES-NOTES.md](docs/RULES-NOTES.md) | exactly which rules are implemented how — and the ❓ calls to confirm against your table's rules |
 | [docs/ENCOUNTER-FORMAT.md](docs/ENCOUNTER-FORMAT.md) | the encounter file format, the rewards flow, and a prompt to have Claude write encounters for you |
+| [docs/TURN-ADVISOR.md](docs/TURN-ADVISOR.md) | how the move/attack suggestions are computed, what they ignore, how to tune them |
+| [docs/CLAUDE-BRIEF.md](docs/CLAUDE-BRIEF.md) | the DOCS tab: the Claude brief, why it can't go stale, and the campaign log |
 | [docs/THEMING.md](docs/THEMING.md) | the theme system, design tokens, rules for styling, and the contrast/visual-diff tools |
 | [docs/DEVELOPING.md](docs/DEVELOPING.md) | running, testing, and recipes (add a weapon / NPC / map scene / field) |
 | [docs/ENEMY-AI-NOTES.md](docs/ENEMY-AI-NOTES.md) | groundwork and a build order for enemies that act on their own |
 
-Tests (headless browser, needs Playwright): `node tests/regression.js`, `node tests/encounters.js`, `node tests/themes.js`, `node tests/fuzz-attacks.js`,
+Tests (headless browser, needs Playwright): `node tests/regression.js`, `node tests/encounters.js`, `node tests/themes.js`, `node tests/advisor.js`, `node tests/brief.js`, `node tests/fuzz-attacks.js`,
 `node tests/monkey.js <seed> <clicks>`.
 
 ## Privacy

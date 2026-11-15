@@ -1,8 +1,20 @@
 /* Shared helpers for the headless-browser checks. Needs Playwright: `npm i playwright` (or any install that
-   makes require('playwright') work). The app is a single static file, so we just open it via file://. */
+   makes require('playwright') work).
+   The app is served over a tiny local HTTP server, NOT opened as file://: that is how GitHub Pages serves it, and a file://
+   page loses its localStorage on reload in about 1 reload in 5 under Chromium (the browser swaps storage areas), which made
+   persistence tests flaky for a reason that cannot happen to real users. Set APP=<url or file URL> to test a different build. */
 const { chromium } = require('playwright');
-const path = require('path');
-const APP = 'file://' + path.resolve(__dirname, '..', 'index.html');
+const http = require('http'), fs = require('fs'), path = require('path');
+const INDEX = path.resolve(__dirname, '..', 'index.html');
+let _urlPromise = null;
+function appUrl() {
+  if (process.env.APP) return Promise.resolve(process.env.APP);
+  if (!_urlPromise) _urlPromise = new Promise(resolve => {
+    const srv = http.createServer((q, r) => {                      // re-read on every request so edits made mid-run are served
+      if (q.url.split('?')[0] === '/' || q.url.split('?')[0] === '/index.html') { r.setHeader('content-type', 'text/html; charset=utf-8'); r.end(fs.readFileSync(INDEX)); }
+      else { r.statusCode = 404; r.end('not found'); } });
+    srv.listen(0, '127.0.0.1', () => { srv.unref(); resolve('http://127.0.0.1:' + srv.address().port + '/'); }); });
+  return _urlPromise; }
 const TEST_CHAR = path.resolve(__dirname, '..', 'test-character.json');
 
 async function launch(opts = {}) {
@@ -13,7 +25,7 @@ async function launch(opts = {}) {
   const errors = [];
   page.on('pageerror', e => errors.push(e.message.split('\n')[0]));
   page.on('dialog', d => d.accept());
-  await page.goto(APP);
+  await page.goto(await appUrl());
   await page.waitForTimeout(300);
   return { browser, page, errors };
 }
@@ -35,4 +47,4 @@ async function run(title, checks, opts = {}) {
   console.log(failed ? `\n${title}: ${failed} FAILED` : `\n${title}: all passed`);
   process.exit(failed ? 1 : 0);
 }
-module.exports = { launch, run, APP, TEST_CHAR };
+module.exports = { launch, run, appUrl, TEST_CHAR };
