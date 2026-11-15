@@ -20,6 +20,7 @@ optional GitHub-Gist sync keeps devices in step.
   weapons with attachments, ammo tracker, wardrobe, portraits, IP/Eb ledger, and a roster that copies into combat and
   writes HP/ammo/injuries back.
 - **Vehicles, Gigs, Net Architectures** — deployable vehicles, a shared job log, and runnable netrunning scenes (ICE, demons, programs).
+- **Encounters & rewards** — import a prepared fight as JSON (five Cyberpunk RED examples built in): enemies, gear, map scene and AI behaviour notes load in one step. Afterwards the app *suggests* EB and IP from what was defeated and pays it into each character's ledger.
 - **Dice, calculator, notes**, full-backup export, and cloud auto-sync with a conflict guard.
 
 ## For developers
@@ -29,10 +30,11 @@ optional GitHub-Gist sync keeps devices in step.
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | how the single file is organised, the attack pipeline, and the **gotchas** that cause bugs |
 | [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | every localStorage key, the combatant / character / vehicle shapes, backup formats, cloud sync |
 | [docs/RULES-NOTES.md](docs/RULES-NOTES.md) | exactly which rules are implemented how — and the ❓ calls to confirm against your table's rules |
+| [docs/ENCOUNTER-FORMAT.md](docs/ENCOUNTER-FORMAT.md) | the encounter file format, the rewards flow, and a prompt to have Claude write encounters for you |
 | [docs/DEVELOPING.md](docs/DEVELOPING.md) | running, testing, and recipes (add a weapon / NPC / map scene / field) |
 | [docs/ENEMY-AI-NOTES.md](docs/ENEMY-AI-NOTES.md) | groundwork and a build order for enemies that act on their own |
 
-Tests (headless browser, needs Playwright): `node tests/regression.js`, `node tests/fuzz-attacks.js`,
+Tests (headless browser, needs Playwright): `node tests/regression.js`, `node tests/encounters.js`, `node tests/fuzz-attacks.js`,
 `node tests/monkey.js <seed> <clicks>`.
 
 ## Privacy

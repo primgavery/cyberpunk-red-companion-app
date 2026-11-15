@@ -17,6 +17,7 @@ Node and Playwright (`npm i playwright && npx playwright install chromium`); not
 
 ```bash
 node tests/regression.js          # one check per bug that has actually bitten the app (fast, ~15 s)
+node tests/encounters.js          # encounter import, the five built-in examples, rewards and the ledger
 node tests/fuzz-attacks.js        # every weapon × fire mode × aim × range through the real attack modal
 node tests/monkey.js 1 3000       # random-click monkey: seed, number of clicks. Exit 1 on any uncaught error
 ```
@@ -40,6 +41,12 @@ for autofire, `areaMode` for area weapons). `rangeRow` must be a key of `RANGE.s
 
 **Add an NPC template.** Append to `NPC_LIB`: `{tier, name, hp, sp, cn, dodge}` (+ `vehicle:{name,type,sdp,sp,seats,move}`
 to spawn with a vehicle). CN is the single combat number added to attacks and dodges.
+
+**Add an example encounter.** Append `{name, blurb, data:{…}}` to `EXAMPLE_ENCOUNTERS` (format in
+[ENCOUNTER-FORMAT.md](ENCOUNTER-FORMAT.md)). `tests/encounters.js` imports every example and fails on any warning, so a
+misspelt weapon or scene is caught immediately.
+
+**Tune rewards.** `REWARD_TABLE` (one `{eb, ip}` per tier). New tiers also need an entry in `tierOf`/`NPC_LIB`.
 
 **Add a map scene.** Write `presetFoo()` (see `presetAlley` — it sets `G.cols/rows`, `G.floorDeco`, and places cover with
 `gridFillCover(name, hp, cells)` / `gridMkCover`), add it to `GRID_PRESET_FNS` **and** a matching `{name, …}` entry at the same index in `GRID_PRESETS`.

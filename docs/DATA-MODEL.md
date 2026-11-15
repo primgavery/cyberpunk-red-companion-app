@@ -17,6 +17,7 @@ All access goes through `store.get/set` (which survives blocked/full storage —
 | `cpred_tokenstyle` | `save()` | token display options (shape, portrait, name, hp display, scale) |
 | `cpred_theater` | `save()` | `'1'`/`'0'` — Theater of the Mind |
 | `cpred_map` | `save()` | `{cols, rows, floorDeco[]}` — grid size and painted floor (**not** cover/tokens; those are combatants) |
+| `cpred_encounter` | `saveEncounterState()` | the active encounter record: `{name, summary, scene, rewards:{eb,ip,notes,bonuses[],claimed}, kills:{combatantId→tier}, paid:{combatantId→1}, claims[]}` — see [ENCOUNTER-FORMAT.md](ENCOUNTER-FORMAT.md) |
 | `cpred_roster` | `saveRoster()` | character sheets |
 | `cpred_vehicles` | `saveVehicles()` | vehicle sheets |
 | `cpred_gigs` | `saveGigs()` | shared gig log |
@@ -88,6 +89,15 @@ trackDeath, body_stat, side, ip, eurodollars, archive, images[], injuries[], con
   `rosterId`). `writeBack(combatId)` copies HP, SP, weapons/ammo, injuries, conditions and Solo state back.
   Until you write back, combat damage does not touch the sheet.
 
+## IP / Eb ledger (`roster[].archive`)
+
+A character's money and improvement points are **derived from a ledger**, not stored as a number:
+`archive = {gigs:[{name, ip, eb, session}], improvements:[{name, cost, session}], purchases:[{name, cost, notes, session}], dtd:[…], notes, curSession}`.
+`csComputeEb` = Σ `gigs.eb` + Σ `dtd.eb` (hustles) − Σ `purchases.cost`; `csComputeIP` = Σ `gigs.ip` − Σ `improvements.cost`.
+`roster[].ip` / `.eurodollars` are cached copies refreshed on save. **Encounter rewards append a `gigs` entry** via
+`awardToRoster()` and refresh the cache — never write to `ip`/`eurodollars` directly, they would be overwritten the next time the sheet is saved.
+If that character's sheet is open, `awardToRoster` also pushes to the sheet's in-memory ledger so the save doesn't drop the award.
+
 ## Other records
 
 - **Vehicle** `{id,name,type,cat,sdp,sdpMax,sp,seats,move,speed,cost,upgrades[],mountedWeapons[],notes,owner}`.
@@ -101,8 +111,8 @@ trackDeath, body_stat, side, ip, eurodollars, archive, images[], injuries[], con
 
 | Format | Produced by | Restore | Includes |
 |---|---|---|---|
-| **Full backup** `{app:"cpred_full_backup", …}` | `buildBackupData` (file download + cloud sync) | `applyBackupData` — *replaces* everything | combatants, notes, round/active, log, roster, vehicles, architectures, gigs, tokenStyle, sortMode, theaterMode, map |
-| **Save text** `{app:"cpred", v:6, …}` | Tools → Save / Load | `applyLoad` — replaces the encounter, **merges** roster/vehicles/architectures/gigs by name | same minus tokenStyle/sort/theater |
+| **Full backup** `{app:"cpred_full_backup", …}` | `buildBackupData` (file download + cloud sync) | `applyBackupData` — *replaces* everything | combatants, notes, round/active, log, roster, vehicles, architectures, gigs, tokenStyle, sortMode, theaterMode, map, encounter |
+| **Save text** `{app:"cpred", v:6, …}` | Tools → Save / Load | `applyLoad` — replaces the encounter, **merges** roster/vehicles/architectures/gigs by name | same minus tokenStyle/sort/theater (includes map and encounter) |
 | **Roster export** `{app:"cpred_roster", roster:[…]}` | CHARS → export | `applyRosterImport` — merge by name, skips duplicates | characters only (see `test-character.json`) |
 | **Vehicle export** `{app:"cpred_vehicles", …}` | vehicle sheet | `applyVehicleImport` | vehicles only |
 

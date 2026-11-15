@@ -1283,9 +1283,13 @@ function openTools(){
   const html=
     toolsGroup('ENCOUNTER SETUP',
       toolsRow('openRosterPick','◉','Roster picker')+
+      toolsRow('openEncounterImport','⇩','Import encounter')+
       toolsRow('openLibrary','☰','NPC library')+
       toolsRow('toggleSort','⇅','Sort: <span id="sortLabel">'+(sortMode==='init'?'INIT':'ADDED')+'</span>')+
       toolsRow('clearEncounter','✕','New encounter')
+    )+
+    toolsGroup('REWARDS',
+      toolsRow('openRewards','💰','Encounter rewards (EB / IP)')
     )+
     toolsGroup('COMBAT MODE',
       toolsRow('toggleTheaterMode','🎭','Theater of the Mind: <span id="theaterLabel">'+(theaterMode?'ON':'OFF')+'</span>')
@@ -1924,7 +1928,7 @@ function setSeatRole(id,role){ const c=find(id); if(!c)return;
   }
   c.seatRole=role; save(); renderCombat();
 }
-function clearEncounter(){ if(!combatants.length)return; pushUndo('Encounter cleared'); combatants=[]; roundNo=1; activeId=null; save(); renderCombat(); }
+function clearEncounter(){ if(!combatants.length)return; rwSnapshotKills(); pushUndo('Encounter cleared'); combatants=[]; roundNo=1; activeId=null; save(); renderCombat(); }
 function adj(id,field,delta){ const c=find(id); if(!c)return; c[field]=Math.max(0,(c[field]||0)+delta);
   if(field==='hp')c.hp=Math.min(c.hp,c.hpMax);
   if(field==='head'&&c.head>(c.headMax||0))c.headMax=c.head;
@@ -3347,7 +3351,7 @@ function addFromLibrary(i){ const b=NPC_LIB[i]; const q=libQty[i]||1;
       loc:'body', armorMode:'full', ablate:1, note:'', lastHit:'',
       trackDeath:false, body_stat:5, deathSaves:0, deathResult:'', behindCoverId:vehId, onFire:false,
       canDodge:b.dodge, dodgeBase:0, seatRole:vehId?(k===0?'driver':'passenger'):null,
-      cn:b.cn, useCN:true, ncn:b.cn-2, ncnAuto:true, checkResult:'', isCover:false }); }
+      cn:b.cn, useCN:true, ncn:b.cn-2, ncnAuto:true, checkResult:'', isCover:false, tier:b.tier }); }
   const vehMsg=b.vehicle?' in '+b.vehicle.name:'';
   document.getElementById('libAdded').textContent='Added '+q+' × '+b.name+(armed?' with '+armed.name:'')+vehMsg+' as '+(libSide==='ally'?'ally':'enemy')+'.';
   libQty[i]=1; renderLibrary(); save(); renderCombat(); }
@@ -6111,7 +6115,8 @@ function buildBackupData(){
     tokenStyle:tokenStyle,
     sortMode:sortMode,
     theaterMode:theaterMode,
-    map:mapState()
+    map:mapState(),
+    encounter:activeEncounter
   };
 }
 function applyBackupData(data){
@@ -6147,6 +6152,7 @@ function applyBackupData(data){
   if(data.sortMode==='added'||data.sortMode==='init') sortMode=data.sortMode;
   if(typeof data.theaterMode==='boolean') theaterMode=data.theaterMode;
   if(data.map) applyMapState(data.map);
+  if(data.encounter!==undefined){ activeEncounter=(data.encounter&&typeof data.encounter==='object')?data.encounter:null; store.set(ENC_KEY,JSON.stringify(activeEncounter)); }
   /* the data is fully restored and saved to disk above — everything past this
      point is just refreshing what's on screen, so a render hiccup (an
      unexpected shape somewhere we didn't anticipate) must never make the
@@ -8227,7 +8233,7 @@ function loadRosterFromFile(ev){ const f=ev.target.files&&ev.target.files[0]; if
 /* ---- also include roster in the encounter save/load ---- */
 const _origOpenSaveLoad=openSaveLoad;
 openSaveLoad=function(){
-  document.getElementById('saveText').value=JSON.stringify({app:'cpred',v:6,combatants,notes:notesData,round:roundNo,activeId:activeId,log:combatLog,roster:roster,vehicles:vehicles,architectures:architectures,gigs:gigs,map:mapState()},null,1);
+  document.getElementById('saveText').value=JSON.stringify({app:'cpred',v:6,combatants,notes:notesData,round:roundNo,activeId:activeId,log:combatLog,roster:roster,vehicles:vehicles,architectures:architectures,gigs:gigs,map:mapState(),encounter:activeEncounter},null,1);
   document.getElementById('loadText').value=''; document.getElementById('saveMsg').textContent=''; document.getElementById('loadMsg').textContent='';
   document.getElementById('saveModal').classList.add('open');
 };
@@ -8282,6 +8288,7 @@ applyLoad=function(txt,msgEl){
     saveGigs(); renderGigsList();
   }
   if(data&&data.map) applyMapState(data.map);
+  if(data&&data.encounter&&typeof data.encounter==='object'){ activeEncounter=data.encounter; store.set(ENC_KEY,JSON.stringify(activeEncounter)); }
   expandedIds=new Set(); save(); renderCombat(); closeSaveLoad();
 };
 function applyVehicleImport(data,msgEl){
@@ -12016,6 +12023,7 @@ function gridCleanMenu(){
 function gridCleanDo(mode){
   document.getElementById('tempModal').classList.remove('open');
   let removed=0;
+  rwSnapshotKills();   /* remember who was defeated before they are removed, so rewards can still be claimed */
   const before=combatants.length;
   if(mode==='deadEnemies'){
     combatants=combatants.filter(c=>!(c.side==='enemy'&&!c.isCover&&c.hp<=0));
@@ -12040,6 +12048,254 @@ function gridCleanDo(mode){
   save(); renderCombat(); gridDraw();
   toast('Cleared '+removed+' item'+(removed!==1?'s':''));
 }
+
+/* ============ ENCOUNTERS & REWARDS ============
+   An encounter file (docs/ENCOUNTER-FORMAT.md) describes a fight: scene, enemies (from NPC_LIB templates + gear from the
+   WEAPONS / ARMOR catalogs), behaviour notes, and optional rewards. importEncounter() turns it into ordinary combatants,
+   so everything downstream (attacks, map, save, backup) is unchanged.
+   Rewards: defeated enemies are tallied by tier -> REWARD_TABLE gives a *suggested* EB/IP, the encounter file may carry its own,
+   and rwApply() appends the result to each chosen character's IP/Eb ledger (archive.gigs) — the same place you'd type it by hand. */
+const ENC_KEY='cpred_encounter';
+let activeEncounter=null;   /* {name,summary,scene,rewards,kills:{id:tier},paid:{id:1},claims:[]} — see rwEnc() */
+try{ activeEncounter=JSON.parse(store.get(ENC_KEY)||'null'); }catch(e){ activeEncounter=null; }
+function saveEncounterState(){ store.set(ENC_KEY,JSON.stringify(activeEncounter)); scheduleAutoSync(); }
+function rwEnc(){ if(!activeEncounter||typeof activeEncounter!=='object') activeEncounter={};
+  const e=activeEncounter;
+  if(typeof e.name!=='string') e.name=''; if(typeof e.summary!=='string') e.summary=''; if(typeof e.scene!=='string') e.scene='';
+  if(!e.kills||typeof e.kills!=='object') e.kills={}; if(!e.paid||typeof e.paid!=='object') e.paid={};
+  if(!Array.isArray(e.claims)) e.claims=[]; if(e.rewards===undefined) e.rewards=null;
+  return e; }
+
+/* HOUSE DEFAULTS — not from the rulebook. Edit freely; the rewards screen shows the working and lets you override. */
+const REWARD_TABLE={ 'STANDARD':{eb:25,ip:3}, 'MINI BOSS':{eb:100,ip:8}, 'BOSS':{eb:250,ip:15}, 'VEHICLE':{eb:40,ip:4} };
+function tierOf(c){ if(c.tier&&REWARD_TABLE[c.tier]) return c.tier;
+  if(/mini.?boss/i.test(c.name||'')) return 'MINI BOSS'; if(/boss/i.test(c.name||'')) return 'BOSS'; return 'STANDARD'; }
+function normName(s){ return String(s==null?'':s).toLowerCase().replace(/[^a-z0-9]+/g,''); }
+function encNum(v,lo,hi,def){ const n=parseInt(v); return isFinite(n)?Math.max(lo,Math.min(hi,n)):def; }
+
+/* ---- build ---- */
+function encAiNote(ai){ if(!ai||typeof ai!=='object') return '';
+  const bits=[]; const prof=String(ai.profile||'').trim();
+  if(ai.notes) bits.push(String(ai.notes).slice(0,240));
+  if(ai.stayInCoverUntil) bits.push('Holds cover until '+String(ai.stayInCoverUntil).slice(0,30)+'.');
+  if(ai.retreatAtHpPct!=null&&isFinite(parseInt(ai.retreatAtHpPct))) bits.push('Retreats below '+parseInt(ai.retreatAtHpPct)+'% HP.');
+  if(ai.focus) bits.push('Targets: '+String(ai.focus).slice(0,30)+'.');
+  if(Array.isArray(ai.preferRange)&&ai.preferRange.length===2) bits.push('Prefers '+parseInt(ai.preferRange[0])+'–'+parseInt(ai.preferRange[1])+' m.');
+  if(!prof&&!bits.length) return '';
+  return '🧠 '+(prof?prof.charAt(0).toUpperCase()+prof.slice(1)+(bits.length?' — ':''):'')+bits.join(' '); }
+function encFindWeapon(name){ const n=normName(name); if(!n) return null;
+  return WEAPONS.find(w=>normName(w.name)===n)||WEAPONS.find(w=>normName(w.name).startsWith(n))||null; }
+function encBuildWeapon(w,warn){
+  if(typeof w==='string'){ const b=encFindWeapon(w); if(!b){ warn.push('Unknown weapon "'+w.slice(0,40)+'" — skipped (see the WEAPONS catalog for valid names).'); return null; } return weaponFromCatalog(b); }
+  if(w&&typeof w==='object'&&w.name){ const base=encFindWeapon(w.name)||{};
+    const o=weaponFromCatalog(Object.assign({},base,{name:String(w.name).slice(0,40),
+      skill:w.skill||base.skill||'Handgun',dmg:/^\d+d\d+$/.test(String(w.dmg||''))?w.dmg:(base.dmg||'2d6'),
+      mag:w.mag!=null?encNum(w.mag,1,200,base.mag):base.mag,rangeRow:w.rangeRow||base.rangeRow,rof:w.rof!=null?encNum(w.rof,1,3,1):base.rof,
+      melee:w.melee!=null?!!w.melee:base.melee}));
+    if(!o.rangeRow&&o.mag==null) o.melee=true; return o; }
+  warn.push('A weapon entry was not a name or an object — skipped.'); return null; }
+function encBuildNpc(spec,side,warn,vehId,seat){
+  let tpl=null;
+  if(spec.template){ tpl=NPC_LIB.find(n=>!n.vehicle&&normName(n.name)===normName(spec.template)); if(!tpl) warn.push('Unknown template "'+String(spec.template).slice(0,30)+'" — using Mook stats.'); }
+  if(!tpl&&spec.tier){ tpl=NPC_LIB.find(n=>!n.vehicle&&n.tier===String(spec.tier).toUpperCase()); }
+  tpl=tpl||NPC_LIB[0];
+  const hp=encNum(spec.hp,1,999,tpl.hp);
+  let headSp=encNum(spec.headSp!=null?spec.headSp:spec.sp,0,30,tpl.sp), bodySp=encNum(spec.bodySp!=null?spec.bodySp:spec.sp,0,30,tpl.sp);
+  let armorName='';
+  if(spec.armor){ const a=ARMOR_CATALOG.find(x=>normName(x.name)===normName(spec.armor));
+    if(a){ headSp=bodySp=a.sp; armorName=a.name; } else warn.push('Unknown armor "'+String(spec.armor).slice(0,30)+'" — using template SP.'); }
+  const cn=encNum(spec.cn,0,30,tpl.cn);
+  const base=String(spec.name||tpl.name).slice(0,40);
+  const weapons=(Array.isArray(spec.weapons)?spec.weapons:[]).slice(0,6).map(w=>encBuildWeapon(w,warn)).filter(Boolean);
+  if(spec.ammo&&typeof AMMO!=='undefined'&&AMMO[String(spec.ammo)]) weapons.forEach(w=>{ if(!w.melee) w.ammoType=String(spec.ammo); });
+  else if(spec.ammo) warn.push('Unknown ammo "'+String(spec.ammo).slice(0,20)+'" — using basic.');
+  const noteBits=[encAiNote(spec.ai),armorName?'Armor: '+armorName:'',spec.note?String(spec.note).slice(0,300):''].filter(Boolean);
+  const c={ id:uid(), side:side, name:nextLibName(base), hpMax:hp, hp:hp, head:headSp, body:bodySp, headMax:headSp, bodyMax:bodySp,
+    init:encNum(spec.init,-20,40,0), weapons:weapons, injuries:[], conditions:[], loc:'body', armorMode:'full', ablate:1,
+    note:noteBits.join('\n'), lastHit:'', trackDeath:false, body_stat:5, deathSaves:0, deathResult:'',
+    behindCoverId:vehId||null, onFire:false, canDodge:spec.dodge!=null?!!spec.dodge:tpl.dodge, dodgeBase:0,
+    seatRole:seat||null, cn:cn, useCN:true, ncn:cn-2, ncnAuto:true, checkResult:'', isCover:false,
+    tier:String(spec.tier&&REWARD_TABLE[String(spec.tier).toUpperCase()]?String(spec.tier).toUpperCase():tpl.tier) };
+  if(spec.move!=null) c.npcMove=encNum(spec.move,1,20,6);
+  if(spec.ai&&typeof spec.ai==='object') c.ai=JSON.parse(JSON.stringify(spec.ai));
+  return c; }
+function encAddVehicle(v,side){
+  const name=nextLibName(String(v.name||'Vehicle').slice(0,40)), type=String(v.type||'Vehicle').slice(0,30);
+  const sdp=encNum(v.sdp,1,999,50), sp=encNum(v.sp,0,30,0), seats=encNum(v.seats,1,12,4), move=encNum(v.move,1,60,20);
+  const vg=vehicleGrid(name+' '+type); const id=uid();
+  const maxInit=combatants.length?Math.max(...combatants.map(c=>c.init||0)):0;
+  combatants.push({ id, side, name, hpMax:sdp, hp:sdp, head:sp, body:sp, headMax:sp, bodyMax:sp, init:maxInit+1, weapons:[], injuries:[], conditions:[],
+    loc:'body', armorMode:'full', ablate:1, note:'🚗 '+type+' · SDP '+sdp+'/'+sdp+(sp?' · SP '+sp:'')+' · MOVE '+move+' · Seats '+seats,
+    lastHit:'', trackDeath:false, body_stat:5, deathSaves:0, deathResult:'', behindCoverId:null, onFire:false, canDodge:false, dodgeBase:0,
+    cn:0, useCN:false, ncn:0, ncnAuto:true, checkResult:'', isCover:true, isVehicle:true, vehicleId:null, mountedWeapons:[],
+    vehicleSeats:seats, seatRole:null, gridW:vg.w, gridH:vg.h });
+  return id; }
+
+function importEncounter(data,opts){
+  opts=opts||{}; const warn=[];
+  if(!data||typeof data!=='object'||Array.isArray(data)) throw new Error('That is not an encounter file (expected a JSON object).');
+  if(data.app&&data.app!=='cpred_encounter') throw new Error('That file is a "'+String(data.app).slice(0,30)+'" file, not an encounter.');
+  const foes=Array.isArray(data.enemies)?data.enemies:[], friends=Array.isArray(data.allies)?data.allies:[];
+  if(!foes.length&&!friends.length) throw new Error('No "enemies" listed — nothing to add.');
+  const total=foes.concat(friends).reduce((s,x)=>s+encNum(x&&x.qty,1,20,1),0);
+  if(total>40) throw new Error('Too many combatants ('+total+'); the limit is 40 per file.');
+  if(opts.replace){ if(combatants.length) pushUndo('Encounter replaced'); combatants=[]; roundNo=1; activeId=null; activeEncounter=null; }
+  let scene=null;
+  if(data.scene){ const i=GRID_PRESETS.findIndex(p=>normName(p.name)===normName(data.scene));
+    if(i<0) warn.push('Unknown scene "'+String(data.scene).slice(0,30)+'" — choose a map yourself. Valid: '+GRID_PRESETS.map(p=>p.name).join(', ')+'.');
+    else if(opts.replace){ gridLoadPreset(i); scene=GRID_PRESETS[i].name; }
+    else warn.push('Scene "'+GRID_PRESETS[i].name+'" not loaded because you chose Add (it would wipe the current cover). Use Replace to load it.'); }
+  let added=0;
+  const addGroup=(list,side)=>list.forEach((spec,si)=>{
+    if(!spec||typeof spec!=='object'||Array.isArray(spec)){ warn.push((side==='ally'?'Ally':'Enemy')+' #'+(si+1)+' is not an object — skipped.'); return; }
+    const qty=encNum(spec.qty,1,20,1); let vehId=null;
+    if(spec.vehicle&&typeof spec.vehicle==='object') vehId=encAddVehicle(spec.vehicle,side);
+    for(let k=0;k<qty;k++){ combatants.push(encBuildNpc(spec,side,warn,vehId,vehId?(k===0?'driver':'passenger'):null)); added++; } });
+  addGroup(foes,'enemy'); addGroup(friends,'ally');
+  /* encounter record (rewards, name) */
+  const enc=rwEnc();
+  if(!enc.name) enc.name=String(data.name||'').slice(0,80); if(!enc.summary) enc.summary=String(data.summary||'').slice(0,600);
+  if(scene) enc.scene=scene;
+  if(data.rewards&&typeof data.rewards==='object'){ const r=data.rewards;
+    const nb={eb:encNum(r.eb,0,1000000,0), ip:encNum(r.ip,0,10000,0), notes:String(r.notes||'').slice(0,300),
+      bonuses:(Array.isArray(r.bonuses)?r.bonuses:[]).slice(0,10).map(b=>({label:String((b&&b.label)||'Bonus').slice(0,60),eb:encNum(b&&b.eb,0,1000000,0),ip:encNum(b&&b.ip,0,10000,0),claimed:false})), claimed:false};
+    if(enc.rewards&&!enc.rewards.claimed){ enc.rewards.eb+=nb.eb; enc.rewards.ip+=nb.ip; enc.rewards.bonuses=(enc.rewards.bonuses||[]).concat(nb.bonuses); if(nb.notes) enc.rewards.notes=((enc.rewards.notes||'')+' '+nb.notes).trim(); }
+    else enc.rewards=nb; }
+  if(!theaterMode){ try{ gridAutoPlace(); }catch(e){} }
+  logEvent('▶ Encounter loaded: '+(enc.name||'(unnamed)')+' — '+added+' combatant'+(added===1?'':'s')+(enc.summary?' · '+enc.summary:''),'');
+  warn.forEach(w=>logEvent('⚠ import: '+w,''));
+  saveEncounterState(); save(); renderCombat(); try{ gridDraw(); }catch(e){}
+  return {added,warnings:warn,scene}; }
+
+/* ---- import UI ---- */
+function openEncounterImport(){
+  const ex=EXAMPLE_ENCOUNTERS.map((e,i)=>'<button class="btn ghost" style="text-align:left;margin:0 0 6px;" onclick="encLoadExample('+i+')">'+esc(e.name)+
+    '<div class="hint" style="margin:2px 0 0;">'+esc(e.blurb)+'</div></button>').join('');
+  showModal('⇩ IMPORT ENCOUNTER',
+    '<div class="sl">EXAMPLES — tap to fill the box below, then IMPORT</div><div style="display:flex;flex-direction:column;margin:6px 0 12px;">'+ex+'</div>'+
+    '<div class="sl">ENCOUNTER JSON</div>'+
+    '<textarea id="encText" spellcheck="false" placeholder="Paste an encounter here (see docs/ENCOUNTER-FORMAT.md)" style="width:100%;min-height:150px;font-family:var(--mono);font-size:11px;"></textarea>'+
+    '<div style="margin:8px 0;"><input type="file" id="encFile" accept=".json,application/json" onchange="encImportFile(event)"></div>'+
+    '<label style="display:flex;gap:8px;align-items:center;margin-bottom:10px;"><input type="checkbox" style="width:20px;height:20px;flex:0 0 auto;margin:0;" id="encReplace" checked> Replace the current encounter (also loads the map scene)</label>'+
+    '<button class="btn wide" onclick="encImportClick()">IMPORT</button><div id="encMsg" class="hint" style="margin-top:8px;"></div>'); }
+function encLoadExample(i){ const ex=EXAMPLE_ENCOUNTERS[i]; const t=document.getElementById('encText'); if(ex&&t) t.value=JSON.stringify(ex.data,null,1);
+  const m=document.getElementById('encMsg'); if(m) m.textContent='Loaded "'+ex.name+'". Review it, then tap IMPORT.'; }
+function encImportFile(ev){ const f=ev.target.files&&ev.target.files[0]; if(!f) return;
+  const r=new FileReader(); r.onload=()=>{ const t=document.getElementById('encText'); if(t) t.value=String(r.result||''); }; r.readAsText(f); }
+function encImportClick(){
+  const t=document.getElementById('encText'), msg=document.getElementById('encMsg'), rep=document.getElementById('encReplace');
+  let data; try{ data=JSON.parse((t.value||'').trim()); }catch(e){ msg.textContent='That is not valid JSON: '+e.message; return; }
+  let res; try{ res=importEncounter(data,{replace:!!(rep&&rep.checked)}); }catch(e){ msg.textContent='⚠ '+e.message; return; }
+  if(res.warnings.length){ msg.innerHTML='Imported '+res.added+' combatant'+(res.added===1?'':'s')+'. Notes:<br>'+res.warnings.map(w=>'• '+esc(w)).join('<br>'); }
+  else { document.getElementById('tempModal').classList.remove('open'); toast('Encounter loaded — '+res.added+' combatant'+(res.added===1?'':'s')+(res.scene?' on '+res.scene:'')); } }
+
+/* ---- rewards ---- */
+function rwSnapshotKills(){ const enc=rwEnc();
+  combatants.forEach(c=>{ if(c.side==='enemy'&&!c.isCover&&c.hp<=0&&!enc.paid[c.id]) enc.kills[c.id]=tierOf(c); });
+  saveEncounterState(); }
+function rwKillCounts(){ const enc=rwEnc(); const m=Object.assign({},enc.kills);
+  combatants.forEach(c=>{ if(c.isCover||c.side!=='enemy') return; if(c.hp<=0) m[c.id]=tierOf(c); else delete m[c.id]; });
+  const counts={}, ids=[]; Object.keys(m).forEach(id=>{ if(enc.paid[id]) return; counts[m[id]]=(counts[m[id]]||0)+1; ids.push(id); });
+  return {counts,ids}; }
+function rwSuggest(counts){ let eb=0, ip=0; Object.keys(counts).forEach(t=>{ const r=REWARD_TABLE[t]||REWARD_TABLE.STANDARD; eb+=r.eb*counts[t]; ip+=r.ip*counts[t]; }); return {eb,ip}; }
+function awardToRoster(r,label,eb,ip){
+  if(!r.archive||typeof r.archive!=='object') r.archive=blankArchive();
+  if(!Array.isArray(r.archive.gigs)) r.archive.gigs=[];
+  const entry={name:String(label).slice(0,80),ip:ip||0,eb:eb||0,session:r.archive.curSession||1};
+  r.archive.gigs.push(entry);
+  /* an open character sheet holds its own copy of the ledger and would overwrite this on save */
+  if(typeof csEditId!=='undefined'&&csEditId===r.id&&csArchive&&csArchive!==r.archive&&Array.isArray(csArchive.gigs)) csArchive.gigs.push(Object.assign({},entry));
+  r.ip=csComputeIP({archive:r.archive}).hand; r.eurodollars=csComputeEb({archive:r.archive}).hand; }
+function openRewards(){
+  const enc=rwEnc(), k=rwKillCounts(), sug=rwSuggest(k.counts), er=enc.rewards&&!enc.rewards.claimed?enc.rewards:null;
+  const inEnc=new Set(combatants.filter(c=>c.side==='ally'&&c.rosterId).map(c=>c.rosterId));
+  const kl=Object.keys(k.counts).map(t=>k.counts[t]+' × '+t).join(' · ')||'none yet';
+  const who=roster.length?roster.map(r=>'<label style="display:flex;gap:10px;align-items:center;padding:6px 0;"><input type="checkbox" style="width:20px;height:20px;flex:0 0 auto;margin:0;" class="rw-who" value="'+r.id+'"'+(inEnc.has(r.id)?' checked':'')+' onchange="rwRecalc()"> '+esc(r.name||'(unnamed)')+
+    '<span class="hint" style="margin:0 0 0 auto;">'+(r.eurodollars||0)+' eb · '+(r.ip||0)+' IP</span></label>').join(''):'<div class="hint">No roster characters yet — add some on the CHARS tab.</div>';
+  const bon=er&&(er.bonuses||[]).filter(b=>!b.claimed).length?'<div class="sl" style="margin-top:10px;">BONUSES FROM THE ENCOUNTER</div>'+er.bonuses.map((b,i)=>b.claimed?'':
+    '<label style="display:flex;gap:8px;align-items:center;padding:3px 0;"><input type="checkbox" style="width:20px;height:20px;flex:0 0 auto;margin:0;" class="rw-bonus" value="'+i+'" onchange="rwRecalc()"> '+esc(b.label)+' <span class="hint" style="margin:0 0 0 auto;">+'+b.eb+' eb · +'+b.ip+' IP</span></label>').join(''):'';
+  const last=enc.claims.length?'<div class="hint" style="margin-top:8px;">Last awarded: '+esc(enc.claims[enc.claims.length-1].summary)+'</div>':'';
+  showModal('💰 ENCOUNTER REWARDS',
+    (enc.name?'<div style="font-weight:700;">'+esc(enc.name)+'</div>':'')+(enc.summary?'<div class="hint">'+esc(enc.summary)+'</div>':'')+
+    '<div class="sl" style="margin-top:10px;">DEFEATED</div><div>'+esc(kl)+'</div>'+
+    '<div class="sl" style="margin-top:10px;">SUGGESTION</div>'+
+    '<div><b>'+sug.eb+' eb · '+sug.ip+' IP</b> <span class="hint">from house defaults (STANDARD '+REWARD_TABLE.STANDARD.eb+'eb/'+REWARD_TABLE.STANDARD.ip+'IP, MINI BOSS '+REWARD_TABLE['MINI BOSS'].eb+'/'+REWARD_TABLE['MINI BOSS'].ip+', BOSS '+REWARD_TABLE.BOSS.eb+'/'+REWARD_TABLE.BOSS.ip+', VEHICLE '+REWARD_TABLE.VEHICLE.eb+'/'+REWARD_TABLE.VEHICLE.ip+') — not rulebook values</span></div>'+
+    (er?'<div style="margin-top:4px;">Encounter file says: <b>'+er.eb+' eb · '+er.ip+' IP</b>'+(er.notes?' <span class="hint">— '+esc(er.notes)+'</span>':'')+'</div>':'')+
+    '<div style="display:flex;gap:8px;margin:10px 0 4px;"><div style="flex:1;"><div class="sl">EB (total)</div><input id="rwEb" type="number" inputmode="numeric" min="0" value="'+(er?er.eb:sug.eb)+'" oninput="rwRecalc()" style="width:100%;"></div>'+
+      '<div style="flex:1;"><div class="sl">IP (each)</div><input id="rwIp" type="number" inputmode="numeric" min="0" value="'+(er?er.ip:sug.ip)+'" oninput="rwRecalc()" style="width:100%;"></div></div>'+
+    '<div style="display:flex;gap:8px;margin-bottom:6px;"><button class="btn ghost" style="flex:1;" onclick="rwUse('+sug.eb+','+sug.ip+')">USE SUGGESTION</button>'+(er?'<button class="btn ghost" style="flex:1;" onclick="rwUse('+er.eb+','+er.ip+')">USE ENCOUNTER\'S</button>':'')+'</div>'+
+    bon+
+    '<div class="sl" style="margin-top:10px;">SPLIT EB</div><select id="rwSplit" onchange="rwRecalc()" style="width:100%;"><option value="even">Evenly between recipients</option><option value="each">Everyone gets the full amount</option></select>'+
+    '<div class="sl" style="margin-top:10px;">PAY TO</div>'+who+
+    '<div id="rwPreview" class="hint" style="margin:8px 0;"></div>'+
+    '<button class="btn wide" onclick="rwApply()">AWARD</button><div id="rwMsg" class="hint" style="margin-top:8px;"></div>'+last);
+  rwRecalc(); }
+function rwUse(eb,ip){ document.getElementById('rwEb').value=eb; document.getElementById('rwIp').value=ip; rwRecalc(); }
+function rwTotals(){ const enc=rwEnc(), er=enc.rewards;
+  let eb=Math.max(0,parseInt(document.getElementById('rwEb').value)||0), ip=Math.max(0,parseInt(document.getElementById('rwIp').value)||0);
+  const picked=[...document.querySelectorAll('.rw-bonus:checked')].map(b=>parseInt(b.value)).filter(i=>er&&er.bonuses&&er.bonuses[i]);
+  picked.forEach(i=>{ eb+=er.bonuses[i].eb; ip+=er.bonuses[i].ip; });
+  const ids=[...document.querySelectorAll('.rw-who:checked')].map(x=>x.value).filter(id=>rosterFind(id));
+  const n=ids.length, even=(document.getElementById('rwSplit').value==='even');
+  return {eb,ip,picked,ids,n,ebEach:n?(even?Math.floor(eb/n):eb):0,remainder:(n&&even)?eb-Math.floor(eb/n)*n:0}; }
+function rwRecalc(){ const p=document.getElementById('rwPreview'); if(!p) return; const t=rwTotals();
+  p.textContent=t.n?('Each of '+t.n+': '+t.ebEach+' eb'+(t.remainder?' (+'+t.remainder+' to the first)':'')+' · '+t.ip+' IP'):'Pick at least one character to pay.'; }
+function rwApply(){
+  const msg=document.getElementById('rwMsg'), t=rwTotals(), enc=rwEnc();
+  if(!t.n){ msg.textContent='Pick at least one character to pay.'; return; }
+  if(t.eb<=0&&t.ip<=0){ msg.textContent='Nothing to award — set an amount first.'; return; }
+  const label=enc.name||'Combat encounter'; const names=[];
+  t.ids.forEach((id,i)=>{ const r=rosterFind(id); awardToRoster(r,label,t.ebEach+(i===0?t.remainder:0),t.ip); names.push(r.name||'?'); });
+  const k=rwKillCounts(); k.ids.forEach(id=>{ enc.paid[id]=1; delete enc.kills[id]; });
+  if(enc.rewards){ enc.rewards.claimed=true; t.picked.forEach(i=>{ enc.rewards.bonuses[i].claimed=true; }); }
+  const summary=t.eb+' eb total ('+(document.getElementById('rwSplit').value==='even'?'split':'each')+') · '+t.ip+' IP each → '+names.join(', ');
+  enc.claims.push({at:new Date().toISOString(),summary});
+  saveRoster(); renderRoster(); saveEncounterState();
+  logEvent('💰 Rewards for "'+label+'": '+summary,''); save();
+  document.getElementById('tempModal').classList.remove('open'); toast('Awarded — '+names.length+' character'+(names.length===1?'':'s')+' paid'); }
+
+/* ---- built-in examples (Cyberpunk RED / Night City). Tap one in Import to fill the box. ---- */
+const EXAMPLE_ENCOUNTERS=[
+ {name:'Maelstrom Ambush', blurb:'Alleyway · 3 boosters + a Reaver · cover-and-flank fight', data:{
+  app:'cpred_encounter',v:1,name:'Maelstrom Ambush',scene:'Alleyway',
+  summary:'A Maelstrom booster crew jumps the crew in a narrow alley after a deal goes bad. They want the cyberware, not a fair fight. Drop the Reaver and the boosters lose their nerve.',
+  enemies:[
+   {template:'Mook',name:'Maelstrom Booster',qty:3,weapons:['SMG'],ai:{profile:'aggressive',notes:'Rush the nearest target and ignore cover; they break and run once the Reaver is down.'}},
+   {template:'LT',name:'Maelstrom Reaver',weapons:['Assault Rifle','Heavy Melee'],armor:'Kevlar®',dodge:true,ai:{profile:'cautious',stayInCoverUntil:'flanked',retreatAtHpPct:40,focus:'nearest',notes:'Barks orders from behind the dumpsters; falls back down the alley when hurt.'}}],
+  rewards:{eb:150,ip:6,notes:'Stolen cyberware worth fencing.',bonuses:[{label:'Captured the Reaver alive',eb:100,ip:2}]}}},
+ {name:'Tyger Claws Shakedown', blurb:'Convenience Store · melee-heavy, hostage tension', data:{
+  app:'cpred_encounter',v:1,name:'Tyger Claws Shakedown',scene:'Convenience Store',
+  summary:'The Claws are squeezing a shop owner for protection money when the crew walks in. The Sword-Master wants a duel; his thugs want the till.',
+  enemies:[
+   {template:'Mook',name:'Claws Enforcer',qty:2,weapons:['Light Melee'],ai:{profile:'aggressive',notes:'Grab the owner as a shield if the fight turns.'}},
+   {template:'LT',name:'Claws Lieutenant',weapons:['Medium Pistol','Medium Melee'],armor:'Leathers'},
+   {template:'Light Mini Boss',name:'Claws Sword-Master',weapons:['Heavy Melee'],dodge:true,ai:{profile:'duelist',focus:'highest threat',notes:'Wants a one-on-one; dodges rather than blocks; will not use the pistol.'}}],
+  rewards:{eb:120,ip:5,bonuses:[{label:'Shop owner unharmed',eb:50,ip:2}]}}},
+ {name:'Corpo Lobby Breach', blurb:'Corpo Lobby · security team with overwatch, 4 phases of pressure', data:{
+  app:'cpred_encounter',v:1,name:'Corpo Lobby Breach',scene:'Corpo Lobby',
+  summary:'A corporate security team locks the lobby down the moment the alarm trips. A sniper holds the mezzanine while the response solo flanks.',
+  enemies:[
+   {template:'Mook',name:'Corporate Security',qty:4,weapons:['Heavy Pistol'],armor:'Kevlar®',ai:{profile:'cautious',stayInCoverUntil:'round 3',notes:'Fall back toward the elevators if more than half are down.'}},
+   {template:'Mook',name:'Overwatch Marksman',weapons:['Sniper Rifle'],ai:{profile:'sniper',preferRange:[26,50],focus:'the loudest shooter'}},
+   {template:'LT',name:'Security Captain',weapons:['Shotgun'],armor:'Light Armorjack',ai:{profile:'cautious',notes:'Calls for backup on round 2 (GM: backup arrives round 5).'}},
+   {template:'Light Mini Boss',name:'Response Solo',weapons:['Assault Rifle'],armor:'Light Armorjack',ai:{profile:'flanker',notes:'Enters from the service door on round 2 and goes for the netrunner or medic first.'}}],
+  rewards:{eb:300,ip:10,bonuses:[{label:'Alarm never reached the upper floors',eb:150,ip:3}]}}},
+ {name:'Nomad Highway Raid', blurb:'Street Shootout · raiders on bikes and a rig (vehicle crews)', data:{
+  app:'cpred_encounter',v:1,name:'Nomad Highway Raid',scene:'Street Shootout',
+  summary:'A rogue pack ambushes the convoy: two bikes to box the lead car in, a rig with gunners behind. Their leader will not stay in the rig.',
+  enemies:[
+   {template:'Mook',name:'Raider Biker',weapons:['Heavy SMG'],vehicle:{name:'Raider Bike',type:'Roadbike',sdp:35,sp:0,seats:2,move:20},ai:{profile:'aggressive',notes:'Circle the lead car; bail out if the bike is destroyed.'}},
+   {template:'Mook',name:'Raider Biker',weapons:['Heavy SMG'],vehicle:{name:'Raider Bike',type:'Roadbike',sdp:35,sp:0,seats:2,move:20}},
+   {template:'Mook',name:'Raider Gunner',qty:2,weapons:['Assault Rifle'],vehicle:{name:'Raider Rig',type:'Compact Groundcar',sdp:50,sp:7,seats:4,move:20},ai:{profile:'cautious',notes:'Shoot from behind the rig; the driver rams if a target is stationary.'}},
+   {template:'Light Mini Boss',name:'Pack Leader',weapons:['Shotgun','Heavy Melee'],dodge:true,ai:{profile:'berserker',retreatAtHpPct:25,notes:'Jumps from the rig onto the nearest vehicle. Fights to the last.'}}],
+  rewards:{eb:220,ip:9,notes:'The rig is worth something if it is still running.',bonuses:[{label:'Convoy cargo intact',eb:200,ip:2}]}}},
+ {name:'Cyberpsycho in the Combat Zone', blurb:'Combat Zone · one very dangerous boss + a hard choice', data:{
+  app:'cpred_encounter',v:1,name:'Cyberpsycho in the Combat Zone',scene:'Combat Zone',
+  summary:'NCPD Psycho Squad has a bounty on "Wire", a cyberpsycho tearing through a burned-out block. He is fast, heavily armored and will not stop. Taking him alive pays double — if it can be done.',
+  enemies:[
+   {template:'Heavy Boss',name:'"Wire" (Cyberpsycho)',hp:70,sp:14,cn:15,weapons:['Heavy SMG','Very Heavy Melee'],ai:{profile:'berserker',focus:'biggest threat',notes:'Ignores cover and never retreats. Charges to melee, fires the SMG while closing. Screams at whoever hurt him last.'}}],
+  rewards:{eb:500,ip:12,notes:'NCPD bounty.',bonuses:[{label:'Subdued non-lethally (Psycho Squad pays double)',eb:500,ip:3}]}}}
+];
 
 /* ============ INIT ============ */
 setSide('enemy');
