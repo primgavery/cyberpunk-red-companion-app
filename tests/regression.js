@@ -72,6 +72,14 @@ run('regression', [
     closeShoot();
     return before === 8 && gridMoveStat(t) === 4 && t.conditions.some(c => /MOVE ½/.test(c.name));
   })],
+  ['map canvas buffer is refitted when the layout changes after load (no vertically squashed tokens)', async p => {
+    await p.evaluate(() => { gridLoadPreset(4); });
+    await p.waitForTimeout(400);
+    await p.evaluate(() => { const strip = document.getElementById('gridInitStrip'); strip.style.minHeight = (strip.offsetHeight + 90) + 'px'; });   // a late layout shift
+    /* poll rather than sleep: under load the observer may take a few frames, but it must get there */
+    return p.waitForFunction(() => { const c = document.getElementById('gridCanvas'), d = window.devicePixelRatio || 1;
+      return Math.abs(c.width / d - c.offsetWidth) <= 1 && Math.abs(c.height / d - c.offsetHeight) <= 1; }, null, { timeout: 5000 }).then(() => true, () => false);
+  }],
   ['full backup round-trips losslessly (modulo migration defaults)', async p => p.evaluate(t => {
     applyRosterImport(t, {}); addRosterToCombat(roster[0].id, 'ally'); libSide = 'enemy'; libQty[0] = 1; addFromLibrary(0);
     const d = JSON.parse(JSON.stringify(buildBackupData())); applyBackupData(JSON.parse(JSON.stringify(d))); const a = JSON.parse(JSON.stringify(buildBackupData()));

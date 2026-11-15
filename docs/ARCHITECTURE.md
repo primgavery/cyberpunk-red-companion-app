@@ -67,6 +67,7 @@ Search for these `/* ===== … ===== */` banners:
 | `NET ARCHITECTURE SYSTEM` | runnable netrunning scenes (floors, ICE, demons, programs) |
 | `ARCHIVE` | IP / eurodollar ledger |
 | `WRITE-BACK` | `writeBack` — copy combat HP/SP/ammo/injuries back to the roster character |
+| `THEMES` | `THEMES` registry, `setTheme`, `openThemePicker`, `themeVar` (canvas colours). The palettes and the shared "modern layer" are in the stylesheet — see [THEMING.md](THEMING.md) |
 | `ENCOUNTERS & REWARDS` | `importEncounter` (file → combatants), `EXAMPLE_ENCOUNTERS`, `REWARD_TABLE`, kill tracking (`rwSnapshotKills`, `rwKillCounts`), `openRewards` / `rwApply`, `awardToRoster` |
 | `VTT BATTLE MAP` | `G`, `gridDraw`, pointer events, LOS/reach/movement, 47-item object library, 43 canvas-drawn sprite functions, 15 scene presets |
 
@@ -120,8 +121,10 @@ calls `scheduleAutoSync()` which (if a Gist token is set) uploads a full backup 
    decide whether it wants them.
 7. **Top-level `let/const` are in TDZ until their line runs.** `save()` can be called early; code it uses that
    touches later-declared state (like `G`) must be guarded (see `mapState`).
-8. **Map units:** one grid cell = 2 m (`gridDist`, `combatGridDist`).
-9. **Undo** (`pushUndo`) snapshots combatants, notes, round, active id and log — **not** roster, vehicles, map.
+8. **Colour is a variable, never a literal.** Every theme is a set of CSS variables; a hard-coded hex breaks at least one of them (usually the light one). Canvas drawing reads colours with `themeVar('--name')`. Details and the contrast tooling: [THEMING.md](THEMING.md).
+9. **The map canvas is sized by layout, not by attributes.** A `ResizeObserver` (in `gridBindEvents`) refits its pixel buffer when the layout changes; before it existed, a late layout shift left the buffer stretched and tokens ~9% squashed.
+10. **Map units:** one grid cell = 2 m (`gridDist`, `combatGridDist`).
+11. **Undo** (`pushUndo`) snapshots combatants, notes, round, active id and log — **not** roster, vehicles, map.
 
 ## Where to add things
 

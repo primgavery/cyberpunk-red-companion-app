@@ -1,6 +1,6 @@
 /* Random-click monkey: seeds a realistic encounter, then clicks/edits thousands of visible controls and reports every
    uncaught JS error together with the control that was last touched. Deterministic per seed.
-   Run: node tests/monkey.js [seed=1] [clicks=1500]   (exit 1 if any error) */
+   Run: node tests/monkey.js [seed=1] [clicks=1500]   (exit 1 if any error); THEME=paper|ember|neon|slate to pick a theme */
 const fs = require('fs');
 const { chromium } = require('playwright');
 const { APP, TEST_CHAR } = require('./lib');
@@ -8,7 +8,9 @@ let s = parseInt(process.argv[2] || '1'); const N = parseInt(process.argv[3] || 
 const rnd = () => { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; };
 (async () => {
   const browser = await chromium.launch();
-  const page = await (await browser.newContext({ viewport: { width: 420, height: 900 }, acceptDownloads: true })).newPage();
+  const ctx = await browser.newContext({ viewport: { width: 420, height: 900 }, acceptDownloads: true });
+  if (process.env.THEME) await ctx.addInitScript(t => { try { if (!localStorage.getItem('cpred_theme')) localStorage.setItem('cpred_theme', t); } catch (e) {} }, process.env.THEME);   // THEME=paper node tests/monkey.js 3 3000
+  const page = await ctx.newPage();
   const errs = new Map(); let last = '(start)';
   page.on('pageerror', e => { const k = e.message.split('\n')[0] + '  <=  ' + last; errs.set(k, (errs.get(k) || 0) + 1); });
   page.on('dialog', async d => { try { await (d.type() === 'prompt' ? d.accept('5') : d.accept()); } catch (e) {} });

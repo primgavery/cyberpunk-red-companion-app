@@ -18,6 +18,7 @@ Node and Playwright (`npm i playwright && npx playwright install chromium`); not
 ```bash
 node tests/regression.js          # one check per bug that has actually bitten the app (fast, ~15 s)
 node tests/encounters.js          # encounter import, the five built-in examples, rewards and the ledger
+node tests/themes.js              # every theme: applies, persists, no flash, and a WCAG contrast audit of 15 screens
 node tests/fuzz-attacks.js        # every weapon × fire mode × aim × range through the real attack modal
 node tests/monkey.js 1 3000       # random-click monkey: seed, number of clicks. Exit 1 on any uncaught error
 ```
@@ -30,6 +31,9 @@ node tests/monkey.js 1 3000       # random-click monkey: seed, number of clicks.
 - Helpers in `tests/lib.js` (`launch`, `run`). Because the app's state is plain globals, tests can call app
   functions directly through `page.evaluate` (`addFromLibrary`, `rollApplyDamage`, `buildBackupData`, …) and stub
   dice with `randInt = () => 6` (restore it afterwards).
+- **Changing how it looks?** Read [THEMING.md](THEMING.md) first. The short version: use variables not hex, put look-changes in
+  the modern layer, then prove it with `node tests/themes.js` (contrast) and the before/after pixel diff:
+  `APP=file:///tmp/old.html node tests/visual-tour.js before && node tests/visual-tour.js after && python3 tests/imgdiff.py before after`.
 - Not covered: the cloud-sync network path (needs a token), canvas pixel output, touch gestures, multi-device
   conflicts.
 
@@ -45,6 +49,8 @@ to spawn with a vehicle). CN is the single combat number added to attacks and do
 **Add an example encounter.** Append `{name, blurb, data:{…}}` to `EXAMPLE_ENCOUNTERS` (format in
 [ENCOUNTER-FORMAT.md](ENCOUNTER-FORMAT.md)). `tests/encounters.js` imports every example and fails on any warning, so a
 misspelt weapon or scene is caught immediately.
+
+**Add or tweak a theme.** See [THEMING.md → Adding a theme](THEMING.md#adding-a-theme); `tests/themes.js` tells you exactly which element fails contrast.
 
 **Tune rewards.** `REWARD_TABLE` (one `{eb, ip}` per tier). New tiers also need an entry in `tierOf`/`NPC_LIB`.
 
