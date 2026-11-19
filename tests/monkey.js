@@ -3,7 +3,7 @@
    Run: node tests/monkey.js [seed=1] [clicks=1500]   (exit 1 if any error); THEME=paper|ember|neon|slate to pick a theme */
 const fs = require('fs');
 const { chromium } = require('playwright');
-const { APP, TEST_CHAR } = require('./lib');
+const { appUrl, TEST_CHAR } = require('./lib');
 let s = parseInt(process.argv[2] || '1'); const N = parseInt(process.argv[3] || '1500');
 const rnd = () => { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; };
 (async () => {
@@ -14,8 +14,9 @@ const rnd = () => { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294
   const errs = new Map(); let last = '(start)';
   page.on('pageerror', e => { const k = e.message.split('\n')[0] + '  <=  ' + last; errs.set(k, (errs.get(k) || 0) + 1); });
   page.on('dialog', async d => { try { await (d.type() === 'prompt' ? d.accept('5') : d.accept()); } catch (e) {} });
-  await page.route('**/*', r => /^(file|data|blob):/.test(r.request().url()) ? r.continue() : r.abort());   // offline: no gist calls
-  await page.goto(APP); await page.waitForTimeout(300);
+  const base = await appUrl();
+  await page.route('**/*', r => (r.request().url().startsWith(base) || /^(file|data|blob):/.test(r.request().url())) ? r.continue() : r.abort());   // offline except the app itself: no gist calls
+  await page.goto(base); await page.waitForTimeout(300);
   await page.evaluate(t => { applyRosterImport(t, {}); addRosterToCombat(roster[0].id, 'ally'); libSide = 'enemy'; libQty[0] = 3; libGun[0] = '0'; addFromLibrary(0); libQty[6] = 1; addFromLibrary(6); combatants.forEach((c, i) => c.init = i); save(); renderCombat(); }, fs.readFileSync(TEST_CHAR, 'utf8'));
   for (let i = 0; i < N; i++) {
     const r = rnd();

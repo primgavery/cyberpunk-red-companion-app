@@ -18,7 +18,10 @@ All access goes through `store.get/set` (which survives blocked/full storage —
 | `cpred_theater` | `save()` | `'1'`/`'0'` — Theater of the Mind |
 | `cpred_map` | `save()` | `{cols, rows, floorDeco[]}` — grid size and painted floor (**not** cover/tokens; those are combatants) |
 | `cpred_theme` | `setTheme()` | `slate` \| `paper` \| `ember` \| `neon`. A per-device preference: **not** included in backups, Save/Load or cloud sync. Read by a script in `<head>` before first paint — see [THEMING.md](THEMING.md) |
-| `cpred_encounter` | `saveEncounterState()` | the active encounter record: `{name, summary, scene, rewards:{eb,ip,notes,bonuses[],claimed}, kills:{combatantId→tier}, paid:{combatantId→1}, claims[]}` — see [ENCOUNTER-FORMAT.md](ENCOUNTER-FORMAT.md) |
+| `cpred_sessionlog` | `saveSessionLog()` | the campaign log: `[{id, at, kind:'note'\|'session'\|'encounter', text}]` — see [CLAUDE-BRIEF.md](CLAUDE-BRIEF.md) |
+| `cpred_briefopts` | `docsSetOpt()` | the DOCS tab's brief options `{party, log, logN, example}` (per device) |
+| `cpred_advisor` | `toggleAdvisor()` | `'0'` turns the NPC turn suggestions off (default on) |
+| `cpred_encounter` | `saveEncounterState()` | the active encounter record: `{name, summary, scene, rewards:{eb,ip,notes,bonuses[],claimed}, kills:{combatantId→tier}, paid:{combatantId→1}, names:{combatantId→name}, claims[]}` (`names` lets the log recap name the fallen after they are cleared) — see [ENCOUNTER-FORMAT.md](ENCOUNTER-FORMAT.md) |
 | `cpred_roster` | `saveRoster()` | character sheets |
 | `cpred_vehicles` | `saveVehicles()` | vehicle sheets |
 | `cpred_gigs` | `saveGigs()` | shared gig log |
@@ -64,6 +67,13 @@ defaults filled by `migrateCombatants`.
   "mountedWeapons": [], "vehicleSeats": 4,
   // map placement (null/undefined = not on the grid)
   "gridX": 3, "gridY": 1, "gridW": 1, "gridH": 1,
+  // NPCs built from an encounter file / the NPC library
+  "tier": "STANDARD",              // reward tier (STANDARD | MINI BOSS | BOSS | VEHICLE)
+  "ai": { "profile": "cautious", "retreatAtHpPct": 40, … },   // behaviour brief; drives the turn advisor, shown as a 🧠 line in `note`
+  "npcMove": 6,                    // MOVE in squares when there is no character sheet
+  // transient per-turn bookkeeping (persisted, but only meaningful during the turn they were set)
+  "_mvUsed": 0, "_mvStamp": "round|activeId",   // squares moved this turn (drag and advisor both add to it)
+  "_advDone": "round|id",          // the advisor strip says "used its turn" while this matches
   // roster-linked only
   "rosterId": "…", "charStats": {…}, "skills": {…}, "skillMisc": {…}, "roles": […],
   "combatAwareness": { /* Solo abilities */ }
@@ -112,8 +122,8 @@ If that character's sheet is open, `awardToRoster` also pushes to the sheet's in
 
 | Format | Produced by | Restore | Includes |
 |---|---|---|---|
-| **Full backup** `{app:"cpred_full_backup", …}` | `buildBackupData` (file download + cloud sync) | `applyBackupData` — *replaces* everything | combatants, notes, round/active, log, roster, vehicles, architectures, gigs, tokenStyle, sortMode, theaterMode, map, encounter |
-| **Save text** `{app:"cpred", v:6, …}` | Tools → Save / Load | `applyLoad` — replaces the encounter, **merges** roster/vehicles/architectures/gigs by name | same minus tokenStyle/sort/theater (includes map and encounter) |
+| **Full backup** `{app:"cpred_full_backup", …}` | `buildBackupData` (file download + cloud sync) | `applyBackupData` — *replaces* everything | combatants, notes, round/active, log, roster, vehicles, architectures, gigs, tokenStyle, sortMode, theaterMode, map, encounter, sessionLog |
+| **Save text** `{app:"cpred", v:6, …}` | Tools → Save / Load | `applyLoad` — replaces the encounter, **merges** roster/vehicles/architectures/gigs by name | same minus tokenStyle/sort/theater (includes map, encounter and sessionLog — the log is **merged by id**, never replaced) |
 | **Roster export** `{app:"cpred_roster", roster:[…]}` | CHARS → export | `applyRosterImport` — merge by name, skips duplicates | characters only (see `test-character.json`) |
 | **Vehicle export** `{app:"cpred_vehicles", …}` | vehicle sheet | `applyVehicleImport` | vehicles only |
 

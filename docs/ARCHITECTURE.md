@@ -28,13 +28,14 @@ app a single file that works from `file://` — but it shapes every rule in [Got
 
 ## Screens
 
-Bottom nav has three tabs; everything else hangs off the 🛠 Tools modal (`openTools`).
+Bottom nav has four tabs (MAP, DICE, CHARS, DOCS); everything else hangs off the 🛠 Tools modal (`openTools`).
 
 | Screen | Section / entry | What it is |
 |---|---|---|
 | **MAP** | `showMapTab` → `openGrid` | Canvas VTT: tokens, cover objects, floor, LOS, reach, range-DV, aimed attacks. Toggle to **list mode** (`setMapMode('list')`) for the card-based combat tracker (`#combat`, `renderCombat`). |
 | **DICE** | `#dice` | d4/d6/d8/d10/d12/d20/d100 roller with modifier, exploding-d10 toggle, timeline + combat log tabs. |
 | **CHARS** | `#roster` | Roster of full character sheets (`openCharSheet`), vehicles, gigs, net architectures. |
+| **DOCS** | `#docs`, `renderDocs` | The brief for Claude (copy/download), the campaign log, and reference tables generated from the live catalogs — see [CLAUDE-BRIEF.md](CLAUDE-BRIEF.md). |
 | Tools modal | `openTools` | Roster picker, NPC library, sort, new encounter, Theater of the Mind, range/DV references, vehicle combat tools, Save/Load, Full backup, Cloud sync, Calculator, Notes, mobile-view toggle. |
 
 **Theater of the Mind** (`toggleTheaterMode`): skip auto-placing tokens on the grid so range/DV is entered by hand.
@@ -67,6 +68,8 @@ Search for these `/* ===== … ===== */` banners:
 | `NET ARCHITECTURE SYSTEM` | runnable netrunning scenes (floors, ICE, demons, programs) |
 | `ARCHIVE` | IP / eurodollar ledger |
 | `WRITE-BACK` | `writeBack` — copy combat HP/SP/ammo/injuries back to the roster character |
+| `TURN ADVISOR` | `suggestTurn` (pure planner), probability helpers (`advHitProb`, `advDamage`), `advDoIt`/`advApplyMove`, the strips (`advRefreshStrips`) and the WHY panel — see [TURN-ADVISOR.md](TURN-ADVISOR.md) |
+| `DOCS TAB, CLAUDE BRIEF & CAMPAIGN LOG` | `ENC_FIELDS`, `AI_PROFILES`, `buildClaudeBrief`, `docsData`, `renderDocs`, the campaign log (`logAdd`, `logCompose`) — see [CLAUDE-BRIEF.md](CLAUDE-BRIEF.md) |
 | `THEMES` | `THEMES` registry, `setTheme`, `openThemePicker`, `themeVar` (canvas colours). The palettes and the shared "modern layer" are in the stylesheet — see [THEMING.md](THEMING.md) |
 | `ENCOUNTERS & REWARDS` | `importEncounter` (file → combatants), `EXAMPLE_ENCOUNTERS`, `REWARD_TABLE`, kill tracking (`rwSnapshotKills`, `rwKillCounts`), `openRewards` / `rwApply`, `awardToRoster` |
 | `VTT BATTLE MAP` | `G`, `gridDraw`, pointer events, LOS/reach/movement, 47-item object library, 43 canvas-drawn sprite functions, 15 scene presets |
@@ -124,7 +127,9 @@ calls `scheduleAutoSync()` which (if a Gist token is set) uploads a full backup 
 8. **Colour is a variable, never a literal.** Every theme is a set of CSS variables; a hard-coded hex breaks at least one of them (usually the light one). Canvas drawing reads colours with `themeVar('--name')`. Details and the contrast tooling: [THEMING.md](THEMING.md).
 9. **The map canvas is sized by layout, not by attributes.** A `ResizeObserver` (in `gridBindEvents`) refits its pixel buffer when the layout changes; before it existed, a late layout shift left the buffer stretched and tokens ~9% squashed.
 10. **Map units:** one grid cell = 2 m (`gridDist`, `combatGridDist`).
-11. **Undo** (`pushUndo`) snapshots combatants, notes, round, active id and log — **not** roster, vehicles, map.
+11. **Element ids are global and `getElementById` returns the first match.** A duplicate id fails *silently* (the new code renders into the wrong, often hidden, element). Prefix new ids by feature (`clog*`, `rw*`, `enc*`, `docs*`); `tests/regression.js` scans 14 screens for duplicates.
+12. **Planners must not touch state.** `suggestTurn` is pure on purpose (it even avoids `gridMoveBudget`, which stamps the combatant); `advApplyMove` is where state changes, using the same bookkeeping as a drag. `gridReach`'s cache key covers every token's position, so it is safe to call after anything moves.
+13. **Undo** (`pushUndo`) snapshots combatants, notes, round, active id and log — **not** roster, vehicles, map.
 
 ## Where to add things
 

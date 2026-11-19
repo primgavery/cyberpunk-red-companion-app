@@ -18,11 +18,14 @@ Node and Playwright (`npm i playwright && npx playwright install chromium`); not
 ```bash
 node tests/regression.js          # one check per bug that has actually bitten the app (fast, ~15 s)
 node tests/encounters.js          # encounter import, the five built-in examples, rewards and the ledger
-node tests/themes.js              # every theme: applies, persists, no flash, and a WCAG contrast audit of 15 screens
+node tests/advisor.js             # the turn advisor: model checked against the real dice code, scenarios, legality of every suggestion, UI
+node tests/brief.js               # the Claude brief (every name it lists must import), the DOCS tab and the campaign log
+node tests/themes.js              # every theme: applies, persists, no flash, and a WCAG contrast audit of 21 screens
 node tests/fuzz-attacks.js        # every weapon × fire mode × aim × range through the real attack modal
 node tests/monkey.js 1 3000       # random-click monkey: seed, number of clicks. Exit 1 on any uncaught error
 ```
 
+- Tests serve `index.html` over a local HTTP server (as GitHub Pages does), not `file://` — under Chromium a `file://` page randomly loses `localStorage` across a reload, which made persistence tests flaky for a reason real users can't hit. `APP=<url>` tests another build.
 - `regression.js` is the gate. **When you fix a bug, add a check that fails on the old code** (stash your change to
   `index.html`, run, confirm it fails, restore).
 - The monkey is deterministic per seed and prints the last control touched next to each error. Run a few seeds
@@ -49,6 +52,10 @@ to spawn with a vehicle). CN is the single combat number added to attacks and do
 **Add an example encounter.** Append `{name, blurb, data:{…}}` to `EXAMPLE_ENCOUNTERS` (format in
 [ENCOUNTER-FORMAT.md](ENCOUNTER-FORMAT.md)). `tests/encounters.js` imports every example and fails on any warning, so a
 misspelt weapon or scene is caught immediately.
+
+**Add an encounter field.** Handle it in `encBuildNpc` / `importEncounter`, add a row to `ENC_FIELDS` (with an example), and add its expected effect to the `checks` in `tests/brief.js`. The brief then documents it automatically and the test proves Claude's use of it will import.
+
+**Add or tune an AI profile.** Add the word to `AI_PROFILES` (it appears in the brief) and a branch in `suggestTurn`; see [TURN-ADVISOR.md](TURN-ADVISOR.md#changing-it).
 
 **Add or tweak a theme.** See [THEMING.md → Adding a theme](THEMING.md#adding-a-theme); `tests/themes.js` tells you exactly which element fails contrast.
 

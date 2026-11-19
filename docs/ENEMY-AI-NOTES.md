@@ -27,7 +27,7 @@ risk (and the bugs) small. It is written from reading the code and exercising it
 
 ## Suggested build order
 
-**Phase 1 — advisor, no automation (safe, useful immediately).**
+**Phase 1 — advisor, no automation (safe, useful immediately). ✅ Built — see [TURN-ADVISOR.md](TURN-ADVISOR.md).**
 When an enemy becomes active, show a one-line recommendation on its card: *"Move to (7,4) (cover), shoot Test Runner
 (DV 15)."* The player/GM clicks to accept — accepting just calls the existing move (`G` drag logic) and opens
 the existing attack modal pre-filled (`openShoot(id,{targetId,range,fromMap:true})` already supports pre-filling).
